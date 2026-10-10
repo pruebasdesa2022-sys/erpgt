@@ -32,3 +32,6 @@ appsettings.QA.json
 logs/
 *.log
 storage/
+
+# Correos guardados en disco por el adaptador de desarrollo
+correo-saliente/
