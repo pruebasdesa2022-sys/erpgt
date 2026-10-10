@@ -1,9 +1,11 @@
 using ERP.Application.Auditoria;
+using ERP.Application.Catalogos;
 using ERP.Application.Comun;
 using ERP.Application.Organizacion;
 using ERP.Application.Seguridad;
 using ERP.Application.Seguridad.Contratos;
 using ERP.Infrastructure.Auditoria;
+using ERP.Infrastructure.Catalogos;
 using ERP.Infrastructure.Integraciones;
 using ERP.Infrastructure.Organizacion;
 using ERP.Infrastructure.Persistencia;
@@ -53,6 +55,18 @@ public static class DependencyInjection
         servicios.AddScoped<IOrganizacionConsulta>(sp => sp.GetRequiredService<EmpresaRepository>());
         servicios.AddScoped<ISucursalRepository, SucursalRepository>();
 
+        // Etapa 1A: catálogos y numeración.
+        servicios.AddCatalogos();
+        servicios.AddScoped<IReferencias, ReferenciasRepository>();
+        servicios.AddScoped<TipoCambioRepository>();
+        servicios.AddScoped<ITipoCambioRepository>(sp => sp.GetRequiredService<TipoCambioRepository>());
+        servicios.AddScoped<ITiposCambioConsulta>(sp => sp.GetRequiredService<TipoCambioRepository>());
+        servicios.AddScoped<IImpuestoRepository, ImpuestoRepository>();
+        servicios.AddScoped<IConversionUnidadRepository, ConversionUnidadRepository>();
+        servicios.AddScoped<ISerieDocumentoRepository, SerieDocumentoRepository>();
+        servicios.AddScoped<INumeracionRepository, NumeracionRepository>();
+        servicios.AddScoped<IConfiguracionRepository, ConfiguracionRepository>();
+
         servicios.AddScoped<ICredencialesRepository, CredencialesRepository>();
         servicios.AddScoped<ISesionRepository, SesionRepository>();
         servicios.AddScoped<IAutorizacionRepository, AutorizacionRepository>();
@@ -60,6 +74,7 @@ public static class DependencyInjection
         servicios.AddScoped<IUsuarioRepository>(sp => sp.GetRequiredService<UsuarioRepository>());
         servicios.AddScoped<IUsuariosConsulta>(sp => sp.GetRequiredService<UsuarioRepository>());
         servicios.AddScoped<IRolRepository, RolRepository>();
+        servicios.AddScoped<IAccesosOperativosRepository, AccesosOperativosRepository>();
         servicios.AddScoped<ModuloRepository>();
         servicios.AddScoped<IModuloRepository>(sp => sp.GetRequiredService<ModuloRepository>());
         servicios.AddScoped<IMenuRepository>(sp => sp.GetRequiredService<ModuloRepository>());

@@ -6,13 +6,28 @@ import { Input } from "@/components/ui/input";
 import { SelectNativo } from "@/components/ui/select-nativo";
 
 /** Barra superior de un listado: búsqueda a la izquierda y filtros a la derecha. */
-export function Barra({ texto, onTexto, marcador, children }: { texto: string; onTexto: (texto: string) => void; marcador: string; children?: ReactNode }) {
+export function Barra({
+  texto,
+  onTexto,
+  marcador,
+  ocultarBusqueda = false,
+  children,
+}: {
+  texto: string;
+  onTexto: (texto: string) => void;
+  marcador: string;
+  /** Para listados que no admiten búsqueda de texto (solo filtros). */
+  ocultarBusqueda?: boolean;
+  children?: ReactNode;
+}) {
   return (
     <div className="flex flex-wrap items-center gap-2 border-b p-3">
-      <div className="relative min-w-48 flex-1 sm:max-w-xs">
-        <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-        <Input type="search" className="pl-8" placeholder={marcador} aria-label={marcador} value={texto} onChange={(e) => onTexto(e.target.value)} />
-      </div>
+      {!ocultarBusqueda && (
+        <div className="relative min-w-48 flex-1 sm:max-w-xs">
+          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+          <Input type="search" className="pl-8" placeholder={marcador} aria-label={marcador} value={texto} onChange={(e) => onTexto(e.target.value)} />
+        </div>
+      )}
       {children}
     </div>
   );

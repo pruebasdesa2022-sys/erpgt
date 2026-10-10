@@ -11,12 +11,13 @@ namespace ERP.IntegrationTests;
 public class InstalacionTests(ApiFixture api)
 {
     [Fact]
-    public async Task El_script_maestro_instala_el_esquema_de_Fase_0_y_registra_su_version()
+    public async Task El_script_maestro_instala_el_esquema_vigente_y_registra_su_version()
     {
         var nombre = new MySqlConnector.MySqlConnectionStringBuilder(api.CadenaConexion).Database;
-        Assert.Equal(23, await api.EscalarAsync<int>(
+        // 23 tablas de Fase 0 + 22 de la etapa 1A.
+        Assert.Equal(45, await api.EscalarAsync<int>(
             "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = @b", ("@b", nombre)));
-        Assert.Equal("0.1.0", await api.EscalarAsync<string>("SELECT version FROM esquema_version WHERE script = 'database.sql'"));
+        Assert.Equal("0.2.0", await api.EscalarAsync<string>("SELECT version FROM esquema_version WHERE script = 'database.sql'"));
         Assert.Equal("Organización", await api.EscalarAsync<string>("SELECT nombre FROM modulo WHERE codigo = 'ORGANIZACION'"));
     }
 
@@ -229,7 +230,8 @@ public class SeguridadTests(ApiFixture api)
     {
         var admin = await api.ClienteAdminAsync();
         var modulos = await admin.GetFromJsonAsync<JsonElement>("/api/v1/seguridad/modulos");
-        var catalogos = modulos.EnumerateArray().Single(m => m.GetProperty("codigo").GetString() == "CATALOGOS");
+        // Catálogos pasó a LIBERADO y base en la 1A; se usa un módulo aún en desarrollo.
+        var catalogos = modulos.EnumerateArray().Single(m => m.GetProperty("codigo").GetString() == "CLIENTES");
         var seguridad = modulos.EnumerateArray().Single(m => m.GetProperty("codigo").GetString() == "SEGURIDAD");
         var id = catalogos.GetProperty("id").GetInt64();
 

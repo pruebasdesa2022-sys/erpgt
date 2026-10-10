@@ -2,13 +2,14 @@
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
-import { KeyRound, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { KeyRound, Pencil, Plus, ShieldCheck, Trash2, Warehouse } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { DialogoConfirmar, EncabezadoPagina } from "@/components/comun/Formulario";
 import { Barra, FiltroActivo, SinPermiso, valorFiltroActivo, type OpcionActivo } from "@/components/comun/Listado";
 import { Puede } from "@/components/comun/Puede";
 import { TablaServidor } from "@/components/comun/TablaServidor";
+import { DialogoAccesosOperativos } from "@/components/seguridad/DialogoAccesosOperativos";
 import { DialogoPermisosDirectos, DialogoRestablecerPassword, FormularioUsuario } from "@/components/seguridad/FormularioUsuario";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,7 @@ import { formatoFechaHora } from "@/lib/formato";
 import { servicioUsuarios } from "@/services";
 import type { UsuarioLista } from "@/types";
 
-type Dialogo = { tipo: "formulario"; id: number | null } | { tipo: "password" | "permisos" | "baja"; usuario: UsuarioLista } | null;
+type Dialogo = { tipo: "formulario"; id: number | null } | { tipo: "password" | "permisos" | "baja" | "accesos"; usuario: UsuarioLista } | null;
 
 function Estado({ usuario }: { usuario: UsuarioLista }) {
   if (!usuario.activo) return <Badge variant="outline">Inactivo</Badge>;
@@ -73,6 +74,9 @@ export default function PaginaUsuarios() {
               <Puede permiso="SEGURIDAD_USUARIOS_EDITAR">
                 <Button variant="ghost" size="icon-sm" aria-label={`Editar ${u.nombreUsuario}`} onClick={() => setDialogo({ tipo: "formulario", id: u.id })}>
                   <Pencil />
+                </Button>
+                <Button variant="ghost" size="icon-sm" aria-label={`Bodegas y cajas de ${u.nombreUsuario}`} onClick={() => setDialogo({ tipo: "accesos", usuario: u })}>
+                  <Warehouse />
                 </Button>
                 <Button variant="ghost" size="icon-sm" aria-label={`Restablecer contraseña de ${u.nombreUsuario}`} onClick={() => setDialogo({ tipo: "password", usuario: u })}>
                   <KeyRound />
@@ -155,6 +159,7 @@ export default function PaginaUsuarios() {
         />
       )}
       {dialogo?.tipo === "permisos" && <DialogoPermisosDirectos usuario={dialogo.usuario} onCerrar={() => setDialogo(null)} />}
+      {dialogo?.tipo === "accesos" && <DialogoAccesosOperativos usuario={dialogo.usuario} onCerrar={() => setDialogo(null)} />}
 
       <DialogoConfirmar
         abierto={dialogo?.tipo === "baja"}

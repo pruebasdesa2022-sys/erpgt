@@ -1,5 +1,7 @@
 using ERP.Application.Auditoria;
+using ERP.Application.Catalogos;
 using ERP.Application.Comun;
+using ERP.Domain.Catalogos;
 using ERP.Domain.Comun;
 using FluentValidation;
 
@@ -44,7 +46,44 @@ public sealed record EmpresaDto
     public string? Direccion { get; init; }
     public string? Telefono { get; init; }
     public string? Correo { get; init; }
+    public string RegimenTributario { get; init; } = "GENERAL";
+    public long MonedaLocalId { get; init; }
     public bool Activo { get; init; }
+    public uint VersionFila { get; init; }
+}
+
+public static class RegimenesTributarios
+{
+    public static readonly IReadOnlyList<string> Todos = ["GENERAL", "PEQUENO_CONTRIBUYENTE"];
+}
+
+/// <summary>El código y el estado de la empresa no se editan desde la aplicación.</summary>
+public sealed record EditarEmpresaDto(
+    string RazonSocial,
+    string NombreComercial,
+    string Nit,
+    string? Direccion,
+    string? Telefono,
+    string? Correo,
+    string RegimenTributario,
+    long MonedaLocalId,
+    uint VersionFila);
+
+public sealed class EditarEmpresaValidator : AbstractValidator<EditarEmpresaDto>
+{
+    public EditarEmpresaValidator()
+    {
+        RuleFor(x => x.RazonSocial).NotEmpty().MaximumLength(200);
+        RuleFor(x => x.NombreComercial).NotEmpty().MaximumLength(200);
+        RuleFor(x => x.Nit).NotEmpty().MaximumLength(20)
+            .Must(Nit.EsValido).WithMessage("El NIT no es válido. Verifique el número y su dígito verificador.");
+        RuleFor(x => x.Direccion).MaximumLength(300);
+        RuleFor(x => x.Telefono).MaximumLength(30);
+        RuleFor(x => x.Correo).MaximumLength(150).EmailAddress().When(x => !string.IsNullOrWhiteSpace(x.Correo));
+        RuleFor(x => x.RegimenTributario).Must(r => RegimenesTributarios.Todos.Contains(r)).WithMessage("Régimen tributario no válido.");
+        RuleFor(x => x.MonedaLocalId).GreaterThan(0).WithMessage("Seleccione la moneda local.");
+        RuleFor(x => x.VersionFila).GreaterThan(0u);
+    }
 }
 
 public sealed record SucursalDto
@@ -104,6 +143,11 @@ public sealed class EditarSucursalValidator : AbstractValidator<EditarSucursalDt
 public interface IEmpresaRepository
 {
     Task<IReadOnlyList<EmpresaDto>> ListarAsync(IReadOnlyCollection<long> ids, CancellationToken ct);
+
+    Task<EmpresaDto?> ObtenerAsync(long id, CancellationToken ct);
+
+    /// <summary>Devuelve false si <c>version_fila</c> ya no coincide (edición concurrente).</summary>
+    Task<bool> ActualizarAsync(long id, EditarEmpresaDto dto, long usuarioId, DateTime ahoraUtc, CancellationToken ct);
 }
 
 public interface ISucursalRepository
@@ -124,11 +168,54 @@ public interface ISucursalRepository
 
 // ----- Casos de uso -----
 
-public sealed class EmpresasService(IEmpresaRepository repositorio, IAccesosUsuarioActual accesos)
+public sealed class EmpresasService(
+    IEmpresaRepository repositorio,
+    IAccesosUsuarioActual accesos,
+    IReferencias referencias,
+    IUnitOfWork unidadDeTrabajo,
+    IAuditoria auditoria,
+    IUsuarioActual actual,
+    IClock reloj)
 {
     /// <summary>Solo las empresas a las que el usuario tiene acceso.</summary>
     public async Task<IReadOnlyList<EmpresaDto>> ListarAsync(CancellationToken ct) =>
         await repositorio.ListarAsync(await accesos.EmpresasPermitidasAsync(ct), ct);
+
+    public Task<EmpresaDto> EditarAsync(long id, EditarEmpresaDto dto, CancellationToken ct)
+    {
+        var usuarioId = actual.UsuarioIdRequerido();
+        var limpio = dto with
+        {
+            RazonSocial = dto.RazonSocial.Trim(),
+            NombreComercial = dto.NombreComercial.Trim(),
+            Nit = Nit.Normalizar(dto.Nit)!,
+            Direccion = Limpiar(dto.Direccion),
+            Telefono = Limpiar(dto.Telefono),
+            Correo = Limpiar(dto.Correo),
+        };
+
+        return unidadDeTrabajo.EjecutarEnTransaccionAsync(async () =>
+        {
+            // Una empresa a la que el usuario no tiene acceso no existe para él.
+            if (!(await accesos.EmpresasPermitidasAsync(ct)).Contains(id))
+                throw new NoEncontradoException("La empresa no existe.");
+
+            var anterior = await repositorio.ObtenerAsync(id, ct) ?? throw new NoEncontradoException("La empresa no existe.");
+
+            if (!await referencias.ExisteActivaAsync(EntidadReferencia.Moneda, limpio.MonedaLocalId, id, ct))
+                throw new ValidacionException("monedaLocalId", "La moneda no existe o está inactiva.");
+
+            if (!await repositorio.ActualizarAsync(id, limpio, usuarioId, reloj.UtcNow, ct))
+                throw ConflictoException.Concurrencia();
+
+            var actualizada = (await repositorio.ObtenerAsync(id, ct))!;
+            await auditoria.RegistrarAsync(
+                new RegistroAuditoria("ORGANIZACION", "empresa", id.ToString(), "EDITAR", anterior, actualizada, EmpresaId: id), ct);
+            return actualizada;
+        }, ct);
+    }
+
+    private static string? Limpiar(string? valor) => string.IsNullOrWhiteSpace(valor) ? null : valor.Trim();
 }
 
 /// <summary>Empresas que el usuario actual puede ver. Lo implementa Seguridad.</summary>
@@ -143,6 +230,7 @@ public interface IAccesosUsuarioActual
 /// </summary>
 public sealed class SucursalesService(
     ISucursalRepository repositorio,
+    IReferencias referencias,
     IUnitOfWork unidadDeTrabajo,
     IAuditoria auditoria,
     IUsuarioActual actual,
@@ -203,6 +291,12 @@ public sealed class SucursalesService(
 
             if (anterior.EsPrincipal && !limpio.Activo)
                 throw new ReglaNegocioException("SUCURSAL_PRINCIPAL", "La sucursal principal no se puede desactivar.");
+
+            if (anterior.Activo && !limpio.Activo
+                && (await referencias.ContarDependientesActivosAsync(RelacionDependiente.BodegasDeSucursal, id, ct)
+                    + await referencias.ContarDependientesActivosAsync(RelacionDependiente.CajasDeSucursal, id, ct)) > 0)
+                throw new ReglaNegocioException("TIENE_DEPENDIENTES",
+                    "La sucursal tiene bodegas o cajas activas. Desactívelas primero.");
 
             if (!await repositorio.ActualizarAsync(empresaId, id, limpio, usuarioId, reloj.UtcNow, ct))
                 throw ConflictoException.Concurrencia();

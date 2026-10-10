@@ -16,6 +16,11 @@ public sealed class EmpresasController(EmpresasService servicio) : ControllerBas
     [HttpGet]
     [RequierePermiso("ORGANIZACION_EMPRESAS_VER")]
     public Task<IReadOnlyList<EmpresaDto>> Listar(CancellationToken ct) => servicio.ListarAsync(ct);
+
+    /// <summary>Edita los datos de la empresa. Las empresas no se crean ni se desactivan desde la aplicación.</summary>
+    [HttpPut("{id:long}")]
+    [RequierePermiso("ORGANIZACION_EMPRESAS_EDITAR")]
+    public Task<EmpresaDto> Editar(long id, EditarEmpresaDto dto, CancellationToken ct) => servicio.EditarAsync(id, dto, ct);
 }
 
 /// <summary>Catálogo de referencia de Fase 0: el patrón CRUD que siguen los demás catálogos.</summary>

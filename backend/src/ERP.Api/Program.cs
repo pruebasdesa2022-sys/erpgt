@@ -4,6 +4,7 @@ using ERP.Api.Controllers.Seguridad;
 using ERP.Api.Middleware;
 using ERP.Api.Seguridad;
 using ERP.Application.Auditoria;
+using ERP.Application.Catalogos;
 using ERP.Application.Comun;
 using ERP.Application.Organizacion;
 using ERP.Application.Seguridad;
@@ -44,11 +45,24 @@ builder.Services.AddScoped<IAccesosUsuarioActual>(sp => sp.GetRequiredService<Au
 builder.Services.AddScoped<AutenticacionService>();
 builder.Services.AddScoped<UsuariosService>();
 builder.Services.AddScoped<RolesService>();
+builder.Services.AddScoped<AccesosOperativosService>();
 builder.Services.AddScoped<ModulosService>();
 builder.Services.AddScoped<MenuService>();
 builder.Services.AddScoped<EmpresasService>();
 builder.Services.AddScoped<SucursalesService>();
 builder.Services.AddScoped<BitacoraService>();
+
+// Etapa 1A: catálogos (motor genérico + los que tienen lógica propia) y numeración.
+builder.Services.AddScoped(typeof(CatalogoService<,,>));
+builder.Services.AddScoped<TiposCambioService>();
+builder.Services.AddScoped<ImpuestosService>();
+builder.Services.AddScoped<ConversionesUnidadService>();
+builder.Services.AddScoped<SeriesDocumentoService>();
+builder.Services.AddScoped<NumeracionService>();
+builder.Services.AddScoped<INumeracion>(sp => sp.GetRequiredService<NumeracionService>());
+builder.Services.AddScoped<ConfiguracionService>();
+builder.Services.AddScoped<IConfiguracionNegocio>(sp => sp.GetRequiredService<ConfiguracionService>());
+builder.Services.AddScoped<IPeriodoBloqueo>(sp => sp.GetRequiredService<ConfiguracionService>());
 
 ValidatorOptions.Global.LanguageManager.Culture = new System.Globalization.CultureInfo("es");
 builder.Services.AddValidatorsFromAssemblyContaining<LoginValidator>();

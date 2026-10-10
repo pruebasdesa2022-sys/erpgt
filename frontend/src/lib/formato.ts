@@ -31,3 +31,21 @@ export function finDelDiaUtc(fecha: string): string | undefined {
   fin.setUTCDate(fin.getUTCDate() + 1);
   return fin.toISOString();
 }
+
+const fechaNegocio = new Intl.DateTimeFormat(LOCAL, { dateStyle: "medium", timeZone: "UTC" });
+const numeroTasa = new Intl.NumberFormat(LOCAL, { minimumFractionDigits: 2, maximumFractionDigits: 8 });
+
+/**
+ * Fecha de negocio (DATE, sin hora) como "2026-10-10". No se convierte de zona horaria:
+ * es el día calendario tal cual, a diferencia de `formatoFecha` que recibe instantes UTC.
+ */
+export function formatoFechaNegocio(fecha: string | null | undefined): string {
+  if (!fecha) return "—";
+  const [anio, mes, dia] = fecha.slice(0, 10).split("-").map(Number);
+  return fechaNegocio.format(new Date(Date.UTC(anio, mes - 1, dia)));
+}
+
+/** Tasas y factores: al menos 2 decimales y hasta 8, sin redondear lo que la base guarda. */
+export function formatoTasa(valor: number): string {
+  return numeroTasa.format(valor);
+}

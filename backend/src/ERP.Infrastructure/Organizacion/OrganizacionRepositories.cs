@@ -7,19 +7,37 @@ namespace ERP.Infrastructure.Organizacion;
 public sealed class EmpresaRepository(UnitOfWork unidadDeTrabajo)
     : RepositorioBase(unidadDeTrabajo), IEmpresaRepository, IOrganizacionConsulta
 {
+    private const string ColumnasEmpresa =
+        "id, codigo, razon_social, nombre_comercial, nit, direccion, telefono, correo, regimen_tributario, " +
+        "moneda_local_id, activo, version_fila";
+
     public async Task<IReadOnlyList<EmpresaDto>> ListarAsync(IReadOnlyCollection<long> ids, CancellationToken ct)
     {
         if (ids.Count == 0)
             return [];
 
         return await ConsultarAsync<EmpresaDto>(
-            """
-            SELECT id, codigo, razon_social, nombre_comercial, nit, direccion, telefono, correo, activo
-            FROM empresa
-            WHERE id IN @ids
-            ORDER BY nombre_comercial
-            """, new { ids }, ct);
+            $"SELECT {ColumnasEmpresa} FROM empresa WHERE id IN @ids ORDER BY nombre_comercial", new { ids }, ct);
     }
+
+    public Task<EmpresaDto?> ObtenerAsync(long id, CancellationToken ct) =>
+        ConsultarUnoAsync<EmpresaDto>($"SELECT {ColumnasEmpresa} FROM empresa WHERE id = @id{ParaActualizar}", new { id }, ct);
+
+    public async Task<bool> ActualizarAsync(long id, EditarEmpresaDto dto, long usuarioId, DateTime ahoraUtc, CancellationToken ct) =>
+        await EjecutarAsync(
+            """
+            UPDATE empresa
+            SET razon_social = @RazonSocial, nombre_comercial = @NombreComercial, nit = @Nit, direccion = @Direccion,
+                telefono = @Telefono, correo = @Correo, regimen_tributario = @RegimenTributario,
+                moneda_local_id = @MonedaLocalId,
+                version_fila = version_fila + 1, modificado_en = @ahoraUtc, modificado_por = @usuarioId
+            WHERE id = @id AND version_fila = @VersionFila
+            """,
+            new
+            {
+                id, dto.RazonSocial, dto.NombreComercial, dto.Nit, dto.Direccion, dto.Telefono, dto.Correo,
+                dto.RegimenTributario, dto.MonedaLocalId, dto.VersionFila, ahoraUtc, usuarioId,
+            }, ct) == 1;
 
     public Task<IReadOnlyList<EmpresaResumen>> ListarEmpresasAsync(CancellationToken ct) =>
         ConsultarAsync<EmpresaResumen>(

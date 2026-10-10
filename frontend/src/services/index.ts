@@ -1,4 +1,5 @@
 import { api, urlBff } from "@/services/http";
+import type { AccesosOperativos, ConfiguracionItem, Empresa, EditarEmpresa, FilaCatalogo, MisAccesosOperativos, TasaVigente } from "@/types/catalogos";
 import type {
   Bitacora,
   CambiarEstadoModulo,
@@ -87,4 +88,43 @@ export const servicioSucursales = {
 
 export const servicioBitacora = {
   listar: (consulta: ConsultaBitacora) => api<ResultadoPaginado<Bitacora>>("auditoria/bitacora", { consulta: { ...consulta } }),
+};
+
+/** Consulta de un catálogo del motor genérico; admite filtros adicionales propios de cada uno. */
+export type ConsultaCatalogo = ConsultaPaginada & { activo?: boolean; [filtro: string]: string | number | boolean | undefined };
+
+/** Operaciones estándar de un catálogo (ver CatalogoService en el backend). */
+export function servicioCatalogo<T extends FilaCatalogo = FilaCatalogo>(recurso: string) {
+  return {
+    listar: (consulta: ConsultaCatalogo) => api<ResultadoPaginado<T>>(recurso, { consulta: { ...consulta } }),
+    crear: (datos: Record<string, unknown>) => api<T>(recurso, { metodo: "POST", cuerpo: datos }),
+    editar: (id: number, datos: Record<string, unknown>) => api<T>(`${recurso}/${id}`, { metodo: "PUT", cuerpo: datos }),
+    desactivar: (id: number, versionFila: number) => api<void>(`${recurso}/${id}`, { metodo: "DELETE", consulta: { versionFila } }),
+    /** La exportación es una descarga: el navegador abre la URL del BFF directamente. */
+    urlExportar: (consulta: ConsultaCatalogo) => urlBff(`${recurso}/exportar`, { ...consulta, page: undefined, pageSize: undefined }),
+  };
+}
+
+export const servicioEmpresas = {
+  listar: () => api<Empresa[]>("organizacion/empresas"),
+  editar: (id: number, datos: EditarEmpresa) => api<Empresa>(`organizacion/empresas/${id}`, { metodo: "PUT", cuerpo: datos }),
+};
+
+export const servicioConfiguracion = {
+  listar: () => api<ConfiguracionItem[]>("catalogos/configuracion"),
+  establecer: (clave: string, valor: string | null) =>
+    api<ConfiguracionItem>(`catalogos/configuracion/${clave}`, { metodo: "PUT", cuerpo: { valor } }),
+  establecerFechaBloqueo: (fecha: string | null) =>
+    api<ConfiguracionItem>("catalogos/configuracion/fecha-bloqueo", { metodo: "PUT", cuerpo: { fecha } }),
+};
+
+export const servicioTiposCambio = {
+  vigente: (monedaId: number, fecha: string) => api<TasaVigente>("catalogos/tipos-cambio/vigente", { consulta: { monedaId, fecha } }),
+};
+
+export const servicioAccesosOperativos = {
+  obtener: (usuarioId: number) => api<AccesosOperativos>(`seguridad/usuarios/${usuarioId}/bodegas-cajas`),
+  guardar: (usuarioId: number, datos: AccesosOperativos) =>
+    api<AccesosOperativos>(`seguridad/usuarios/${usuarioId}/bodegas-cajas`, { metodo: "PUT", cuerpo: datos }),
+  mias: () => api<MisAccesosOperativos>("seguridad/mis-bodegas-cajas"),
 };

@@ -51,8 +51,11 @@ public sealed class ApiFixture : IAsyncLifetime
             if (!script.Contains($"CREATE DATABASE {_baseDeDatos}") || !script.Contains($"USE {_baseDeDatos};"))
                 throw new InvalidOperationException("database.sql ya no contiene 'CREATE DATABASE erpgt' / 'USE erpgt;'; ajuste la sustitución del nombre.");
 
-            await using var comando = new MySqlCommand(script, conexion) { CommandTimeout = 120 };
-            await comando.ExecuteNonQueryAsync();
+            foreach (var bloque in DividirPorDelimitador(script))
+            {
+                await using var comando = new MySqlCommand(bloque, conexion) { CommandTimeout = 120 };
+                await comando.ExecuteNonQueryAsync();
+            }
         }
 
         CadenaConexion = new MySqlConnectionStringBuilder(_cadenaServidor) { Database = _baseDeDatos }.ConnectionString;
@@ -90,6 +93,9 @@ public sealed class ApiFixture : IAsyncLifetime
     }
 
     public string CarpetaCorreo { get; } = Path.Combine(Path.GetTempPath(), $"erp-pruebas-correo-{Guid.NewGuid():N}");
+
+    /// <summary>Contenedor de la API en prueba: permite resolver servicios (numeración, bloqueo de período) directamente.</summary>
+    public IServiceProvider Servicios => _fabrica!.Services;
 
     public HttpClient ClienteAnonimo() => _fabrica!.CreateClient();
 
@@ -172,6 +178,51 @@ public sealed class ApiFixture : IAsyncLifetime
         await conexion.OpenAsync();
         await using var comando = new MySqlCommand(sql, conexion);
         await comando.ExecuteNonQueryAsync();
+    }
+
+    /// <summary>
+    /// MySqlConnector no interpreta DELIMITER (es un comando del cliente mysql). Los bloques entre
+    /// <c>DELIMITER $$</c> y <c>DELIMITER ;</c> (procedimientos) se envían como una sola sentencia y el
+    /// resto del script como lotes de sentencias normales.
+    /// </summary>
+    internal static IEnumerable<string> DividirPorDelimitador(string script)
+    {
+        var lote = new System.Text.StringBuilder();
+        var enBloque = false;
+        string delimitador = ";";
+
+        foreach (var linea in script.Split((char)10))
+        {
+            var texto = linea.TrimEnd((char)13);
+            var recortado = texto.Trim();
+
+            if (recortado.StartsWith("DELIMITER ", StringComparison.OrdinalIgnoreCase))
+            {
+                var nuevo = recortado["DELIMITER ".Length..].Trim();
+                if (enBloque)
+                {
+                    // Cierra el bloque: se descarta el delimitador final del procedimiento.
+                    var cuerpo = lote.ToString().Trim();
+                    if (cuerpo.EndsWith(delimitador, StringComparison.Ordinal))
+                        cuerpo = cuerpo[..^delimitador.Length];
+                    yield return cuerpo;
+                }
+                else if (lote.ToString().Trim().Length > 0)
+                {
+                    yield return lote.ToString();
+                }
+
+                lote.Clear();
+                delimitador = nuevo;
+                enBloque = nuevo != ";";
+                continue;
+            }
+
+            lote.AppendLine(texto);
+        }
+
+        if (lote.ToString().Trim().Length > 0)
+            yield return lote.ToString();
     }
 
     private static string RutaScriptMaestro()

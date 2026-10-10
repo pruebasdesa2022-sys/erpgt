@@ -22,7 +22,11 @@ public sealed class UnitOfWork(OpcionesBaseDatos opciones, ILogger<UnitOfWork> l
 
     private MySqlConnection? _conexion;
 
-    static UnitOfWork() => DefaultTypeMap.MatchNamesWithUnderscores = true;
+    static UnitOfWork()
+    {
+        DefaultTypeMap.MatchNamesWithUnderscores = true;
+        ManejadoresDapper.Registrar();
+    }
 
     public MySqlTransaction? Transaccion { get; private set; }
 
