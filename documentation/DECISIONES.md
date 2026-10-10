@@ -196,3 +196,28 @@ Frontend (`frontend/package.json`; licencia leída del `package.json` de cada pa
 - **TanStack Table queda en la versión 8** a propósito: la 9 (la que instala Yarn por defecto) cambió su API. Subir de versión es una tarea aparte.
 - **xUnit 2** (no 3): es la plantilla disponible en el SDK instalado.
 - No se agregó ninguna librería con licencia comercial.
+
+## ADR-024 — Decisiones de la etapa 1A (maestros y organización)
+
+**Estado:** Aceptada (plan aprobado por el dueño con los valores por defecto) · 2026-10-10
+
+Sin dependencias nuevas en backend ni frontend.
+
+- **Motor genérico de catálogos.** Los catálogos de la forma «código + nombre + datos propios» comparten `CatalogoService` (Application), `CatalogoRepositorio` (Infrastructure) y `CatalogoPagina` (frontend). Cada catálogo declara sus DTO, su descriptor de tabla y, si hace falta, un `IReglasCatalogo`. El SQL se arma con textos fijos del descriptor, nunca con datos de la solicitud. Los repositorios, reglas y validadores base se registran por exploración del ensamblado. Tienen lógica propia y servicio dedicado: tipo de cambio, impuestos, conversiones, series, numeración y configuración.
+- **Alcance de datos.** Todo es por empresa salvo `moneda` y `tipo_documento` (globales) y las unidades y conversiones estándar (`empresa_id` nulo, solo lectura para las empresas, visibles para todas). El código de una unidad propia no puede repetir uno estándar.
+- **Permisos con recurso de una sola palabra** (`ORGANIZACION_CENTROSCOSTO_VER`, `CATALOGOS_TIPOSPRODUCTO_EDITAR`), para respetar el patrón `{MODULO}_{RECURSO}_{ACCION}` que valida la prueba automática de Fase 0 sin modificarla.
+- **`sp_siguiente_correlativo` solo bloquea y avanza** (`FOR UPDATE` + `UPDATE`) y devuelve el número con los datos de la serie; las reglas (activa, vigencia, tope) las valida C# **después**, dentro de la misma transacción, que se revierte si fallan. Por eso `INumeracion` se une a la transacción del documento. El correlativo en curso no se edita desde la pantalla ni toca `version_fila`: editar una serie mientras se emiten documentos no produce conflictos ni lo pisa.
+- **Formato del número de documento:** `[prefijo]-[año]-serie-número` con ceros a la izquierda según `longitud`. Prefijo, año, serie y longitud no se editan tras crear la serie (cambiarían cómo se ve lo ya emitido). Cada documento guardará `serie` y `numero` por separado; el formato es solo de presentación.
+- **`fecha_bloqueo`** vive en `configuracion` (clave `FECHA_BLOQUEO`, con vigencia). Se interpreta como «último día cerrado»: una fecha igual o anterior queda bloqueada. No puede ser posterior a hoy. Tiene permiso propio, distinto del de configuración general. `IPeriodoBloqueo` la aplica al crear y anular documentos (a partir de 1C).
+- **Configuración por clave conocida en código** (`ClavesConfiguracion`): tipo, validación y valor por defecto viven en C#; la base solo guarda los valores fijados. Un valor nuevo cierra el anterior (conserva historial) y, si se cambia el mismo día, reutiliza la fila. `MONTO_MAXIMO_CONSUMIDOR_FINAL` nace en Q2,500 y debe confirmarse con el contador.
+- **Tipo de cambio** por empresa, moneda y fecha, con la tasa en `DECIMAL(18,8)`. Para una fecha sin tasa rige la última anterior; la moneda local vale 1 y no admite tasa; no se registran tasas posteriores a mañana. Se corrige editando (la bitácora conserva el valor anterior); no se borra.
+- **Impuestos con vigencia.** Una fila por código y fecha de inicio; no se traslapan las vigencias activas del mismo código. El porcentaje, el tipo y el inicio no se editan: un cambio de tasa es una vigencia nueva.
+- **Unidades y conversiones.** La conversión es «1 origen = factor destino», solo entre unidades de la misma magnitud. El conjunto visible para la empresa debe ser un bosque: una conversión que uniría unidades ya conectadas (ciclo o segundo camino) se rechaza. `GrafoConversiones` (Domain) calcula factores compuestos para 1B. La conversión específica por producto (1 caja = 12) es de 1B.
+- **Categorías planas**; la jerarquía se agrega con un script si se necesita.
+- **Tipos de documento: lista cerrada** sembrada. La aplicación solo cambia nombre y estado; los códigos implican comportamiento.
+- **Desactivación con dependientes.** No se desactiva una sucursal con bodegas o cajas activas, una bodega con cajas, un departamento con centros de costo, un banco o una moneda con cuentas activas, ni la moneda local de una empresa. `SucursalesService` (Fase 0) ganó esta verificación.
+- **Bodegas y cajas por usuario** (`usuario_bodega`, `usuario_caja`): se asignan con endpoints propios (`/seguridad/usuarios/{id}/bodegas-cajas`), sin modificar los DTO ni el flujo de usuarios de Fase 0, y cada usuario consulta las suyas en `/seguridad/mis-bodegas-cajas`. **No** hay aún bodega o caja activa en el contexto de sesión ni validación por solicitud: llegan con Inventario (1C) y Caja (1F), que son quienes las usan.
+- **`DateOnly` en Dapper** con un `TypeHandler` propio (`ManejadoresDapper`), porque las fechas de negocio son `DATE` sin hora.
+- **Unicidad con carrera.** Dos altas simultáneas del mismo código: la base rechaza la segunda por su UNIQUE y el repositorio traduce el error 1062 a 409 `DUPLICADO`.
+- **Pruebas de integración y `DELIMITER`.** MySqlConnector no interpreta `DELIMITER`; el instalador de pruebas separa los bloques de procedimientos del script maestro antes de ejecutarlos. `database.sql` conserva `DELIMITER` para el cliente `mysql`.
+- **Consecuencias:** 22 tablas nuevas (45 en total); cada catálogo nuevo es un descriptor y unos DTO. Los otorgamientos de MySQL de las tablas nuevas están en `database/usuarios-ejemplo.sql` y, para una base existente, deben aplicarse tras el script incremental.

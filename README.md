@@ -2,7 +2,7 @@
 
 ERP para empresas en Guatemala. Un solo sistema que crece por fases: operación comercial (Fase 1), contabilidad y cuentas por cobrar/pagar (Fase 2), y recursos humanos y nómina (Fase 3).
 
-**Estado:** Fase 0 (fundamentos) — seguridad, usuarios, roles, permisos, control de módulos, menú, auditoría y el catálogo de Sucursales. El avance detallado está en [documentation/PROGRESO.md](documentation/PROGRESO.md).
+**Estado:** Fase 0 (fundamentos) y etapa 1A (maestros y organización): seguridad, usuarios, roles, permisos, control de módulos, menú, auditoría, empresa, sucursales, bodegas, cajas, catálogos generales, monedas, impuestos, unidades, series y configuración. El avance detallado está en [documentation/PROGRESO.md](documentation/PROGRESO.md).
 
 ## Requisitos
 
@@ -27,7 +27,13 @@ mysql -u root -p --default-character-set=utf8mb4 -e "source database/database.sq
 
 El script crea la base `erpgt`, las tablas y los datos indispensables. **Nunca se vuelve a ejecutar sobre una base con datos**: los cambios posteriores llegan como scripts en `database/updates/`.
 
-La aplicación no debe conectarse como `root`. `database/usuarios-ejemplo.sql` es la plantilla para crear su usuario de mínimo privilegio.
+**Si ya tiene una base instalada** con una versión anterior, no ejecute `database.sql`: aplique, en orden y una sola vez, los scripts de `database/updates/` que le falten (el esquema instalado figura en la tabla `esquema_version`). Haga un respaldo antes de cada uno. Por ejemplo, de la 0.1.0 a la 0.2.0:
+
+```powershell
+mysql -u root -p --default-character-set=utf8mb4 -e "source database/updates/20261010_01_fase_1a_maestros.sql"
+```
+
+La aplicación no debe conectarse como `root`. `database/usuarios-ejemplo.sql` es la plantilla para crear su usuario de mínimo privilegio; tras un script incremental que cree tablas, otorgue también los privilegios de las tablas nuevas.
 
 ### 2. Backend
 

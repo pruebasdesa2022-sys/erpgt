@@ -6,9 +6,10 @@
 
 | | |
 |---|---|
-| **Etapa en curso** | **Fase 0 — Fundamentos**: implementada (base de datos, backend y frontend). Pendiente de revisión y aprobación del dueño |
-| **Siguiente etapa** | 1A — Maestros y organización. **No iniciar sin que el dueño lo pida** |
-| **Rama** | `fase-0` (sin fusionar a `main`) |
+| **Etapa en curso** | **1A — Maestros y organización**: implementada (base de datos, backend y frontend). Pendiente de revisión y aprobación del dueño |
+| **Siguiente etapa** | 1B — Clientes, proveedores y productos. **No iniciar sin que el dueño lo pida** |
+| **Rama** | `fase-1a` (creada desde `fase-0`; ninguna está fusionada a `main`) |
+| **Esquema** | 0.2.0 — para una base 0.1.0 instalada: `database/updates/20261010_01_fase_1a_maestros.sql` (**la ejecuta el dueño**) |
 | **Última actualización** | 2026-10-10 |
 
 ## Etapas
@@ -17,7 +18,8 @@
 |---|---|
 | Diseño (C0) | Aprobado |
 | Fase 0 | Implementada — espera aprobación |
-| 1A · 1B · 1C · 1D · 1E · 1F · 1G | No iniciadas |
+| 1A | Implementada — espera aprobación |
+| 1B · 1C · 1D · 1E · 1F · 1G | No iniciadas |
 | 1H (FEL, flotante) | Pendiente de certificador |
 | Fase 2 · Fase 3 | No iniciadas |
 
@@ -32,7 +34,27 @@
   - Transversal: ProblemDetails, correlation id, Serilog, limitación de tasa, `/health`, `/health/version`, OpenAPI en desarrollo.
 - **Frontend** (Next.js 16): BFF con cookies httpOnly, `proxy.ts`, login, recuperación, cambio de contraseña, marco con menú dinámico y selector de sucursal, pantallas de usuarios, roles, módulos, sucursales y bitácora. Tema por tokens (`documentation/DISENO-UI.md`).
 
-## Verificación realizada (2026-10-10)
+## Qué incluye 1A (maestros y organización)
+
+- **Base de datos** (v0.2.0, 45 tablas): `bodega`, `caja`, `departamento`, `centro_costo`, `usuario_bodega`, `usuario_caja`; `moneda`, `tipo_cambio`, `impuesto`, `unidad_medida`, `unidad_conversion`; `tipo_producto`, `categoria`, `marca`, `tipo_proveedor`, `motivo_anulacion`, `banco`, `cuenta_bancaria`, `forma_pago`, `condicion_pago`; `tipo_documento`, `serie_documento` y el procedimiento `sp_siguiente_correlativo`. `empresa` gana `regimen_tributario` y `moneda_local_id`. El módulo `CATALOGOS` queda liberado y base.
+- **Backend:** motor genérico de catálogos (ADR-024) con 15 catálogos; servicios dedicados de tipo de cambio, impuestos, conversiones, series, numeración (`INumeracion`), configuración y fecha de bloqueo (`IPeriodoBloqueo`); edición de empresa con NIT validado; asignación de bodegas y cajas por usuario. Todos los endpoints con `[RequierePermiso]`, auditoría en la misma transacción, concurrencia optimista y baja lógica.
+- **Frontend:** 20 pantallas nuevas (empresa, estructura, catálogos, series, configuración), todas a partir de `CatalogoPagina` salvo empresa y configuración; menú con grupos; diálogo de bodegas y cajas en Usuarios.
+- **«Preparado», sin consumidor todavía:** `INumeracion`, `IPeriodoBloqueo`, `ITiposCambioConsulta`, `IConfiguracionNegocio`, `GrafoConversiones` (factores compuestos) y las columnas `tipo_producto.maneja_inventario` y `forma_pago.requiere_referencia`; los usan 1B–1F.
+
+## Verificación de la etapa 1A (2026-10-10)
+
+| Comprobación | Resultado |
+|---|---|
+| `dotnet build ERP.sln` | Correcto, 0 advertencias |
+| `dotnet test` | 562 unitarias y de arquitectura + 73 de integración, todas pasan (incluye 50 asignaciones de correlativo concurrentes sin saltos ni repetidos, reversión del número, 8 altas simultáneas del mismo código y aislamiento entre empresas) |
+| `corepack yarn typecheck` / `lint` / `test` / `build` | Correctos; 133 pruebas de frontend |
+| `database.sql` 0.2.0 vs. 0.1.0 + script incremental | Esquemas idénticos (columnas, índices, FK, CHECK, rutinas) y mismos seeds; comparados en bases temporales |
+| Flujo real por el BFF contra una base temporal | 26 verificaciones: login y cambio de contraseña, menú, empresa (NIT), bodegas y cajas, marcas, exportación CSV, tipo de cambio, impuestos, unidades, series, fecha de bloqueo, configuración, bitácora y 401 sin cookie |
+| Recorrido de pantallas con Edge sin ventana | 23 pantallas y 4 interacciones sin errores de consola ni de red |
+
+**Sin verificar en 1A:** que la aplicación corra con el usuario MySQL de mínimo privilegio y que `EXECUTE` sobre `sp_siguiente_correlativo` funcione con él (la plantilla ya lo incluye; ver pendiente 1). El script incremental se verificó en bases temporales, no en `erpgt`.
+
+## Verificación de Fase 0 (2026-10-10)
 
 | Comprobación | Resultado |
 |---|---|
@@ -58,11 +80,13 @@ Criterios de aceptación de `ESPECIFICACION.md §C1`:
 - **2026-10-10 — Decisiones de implementación** en ADR-023: marca `[SoloAutenticado]`, rol de sistema no editable, módulos base siempre liberados, cambiar contraseña cierra todas las sesiones, cookies `SameSite=Strict` con verificación de origen, TanStack Table fijado en la versión 8.
 - **2026-10-10 — Único cambio a `database.sql`** en esta sesión: el comentario de cabecera con la versión del motor (anunciado en el plan).
 - **2026-10-10 — Fuera de Fase 0** (no estaban en `§C1`): pantalla para editar la política de contraseñas y los datos de la empresa (1A), listado y cierre de sesiones activas, idempotencia (`Idempotency-Key`, 1C).
+- **2026-10-10 — Decisiones de 1A** en ADR-024: motor genérico de catálogos, alcance global/empresa/estándar, `fecha_bloqueo` como «último día cerrado», categorías planas, tipos de documento cerrados, permisos de recurso de una palabra, accesos por bodega/caja sin contexto de sesión todavía.
+- **2026-10-10 — Archivos de Fase 0 tocados en 1A** (anunciados en el plan o necesarios): `SucursalesService` (no desactivar con dependientes), `Organizacion.cs` (`EmpresaDto` y edición de empresa), `UnitOfWork` (registro del manejador de `DateOnly`), `Barra` del frontend (parámetro opcional para ocultar la búsqueda), página de Usuarios (botón de bodegas y cajas) y, en pruebas, el instalador (`DELIMITER`) y dos pruebas que dependían del estado de `CATALOGOS` y del número de tablas.
 - Decisiones anteriores (diseño, esquema de Fase 0): ver `DECISIONES.md`.
 
 ## Pendientes y problemas conocidos
 
-1. **Usuario MySQL de la aplicación.** La API de desarrollo usa `root` (User Secrets). Falta crear el usuario con `database/usuarios-ejemplo.sql` y comprobar que la aplicación funciona con él (criterio 7).
+1. **Usuario MySQL de la aplicación.** La API de desarrollo usa `root` (User Secrets). Falta crear el usuario con `database/usuarios-ejemplo.sql` (ya incluye las tablas de 1A y `EXECUTE` del procedimiento) y comprobar que la aplicación funciona con él (criterio 7).
 2. **Certificado HTTPS de desarrollo.** Instalado y confiable en este equipo (`dotnet dev-certs https --trust`, vence el 2027-10-09). El perfil `https` de la API (`https://localhost:7080`) no se ha probado; el desarrollo normal usa `http://localhost:5080`.
 3. **`erpgt` conserva la contraseña inicial** del administrador: el flujo se probó en bases temporales para no alterarla.
 4. **Correo.** En desarrollo los mensajes se guardan en `backend/src/ERP.Api/correo-saliente/`. Para producción falta configurar SMTP (`Correo:Modo = Smtp`).
@@ -72,6 +96,12 @@ Criterios de aceptación de `ESPECIFICACION.md §C1`:
 8. `ESPECIFICACION.md §B2` conserva el orden antiguo de secciones del script; prevalece `CLAUDE.md §7`.
 9. `PROMPTS.md`, citado en la especificación, no existe en el proyecto.
 10. Los diagramas Mermaid de `DISENO.md` no se han comprobado en un visor.
+11. **Ejecutar el script incremental en `erpgt`** (lo hace el dueño): `mysql -u <usuario> -p --default-character-set=utf8mb4 -e "source database/updates/20261010_01_fase_1a_maestros.sql"`. Hacer respaldo antes: el DDL de MySQL no es transaccional y, si falla a mitad de camino, hay que restaurarlo. Después, otorgar al usuario de la aplicación los privilegios de las tablas nuevas.
+12. **NIT de la empresa semilla:** es `CF` y el validador no lo acepta; al editar la empresa hay que capturar el NIT real.
+13. **Confirmar con el contador:** monto máximo de consumidor final (Q2,500 sembrado) e IVA 12 % sembrado con vigencia desde 2000-01-01.
+14. **Conversión estándar KG–LB** aproximada a 6 decimales (2.204623).
+15. **Bodega y caja activas en el contexto de sesión** y su validación por solicitud: se agregan con 1C y 1F.
+16. **Moneda local:** cambiarla no recalcula nada; solo es seguro antes de registrar documentos.
 
 ## Comandos de verificación
 
