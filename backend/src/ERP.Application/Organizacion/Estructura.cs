@@ -110,7 +110,11 @@ public sealed class CajaReglas(IReferencias referencias) : IReglasCatalogo<CajaD
             await ValidarBodegaAsync(empresaId, anterior.SucursalId, dto.BodegaId, ct);
     }
 
-    public Task ValidarDesactivarAsync(long empresaId, CajaDto anterior, CancellationToken ct) => Task.CompletedTask;
+    public async Task ValidarDesactivarAsync(long empresaId, CajaDto anterior, CancellationToken ct)
+    {
+        if (await referencias.ContarDependientesActivosAsync(RelacionDependiente.SeriesDeCaja, anterior.Id, ct) > 0)
+            throw new ReglaNegocioException("TIENE_DEPENDIENTES", "La caja tiene series de documentos activas. Desactívelas primero.");
+    }
 
     private async Task ValidarBodegaAsync(long empresaId, long sucursalId, long? bodegaId, CancellationToken ct)
     {

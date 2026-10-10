@@ -216,6 +216,22 @@ public sealed class MonedaReglas(IReferencias referencias) : IReglasCatalogo<Mon
     }
 }
 
+/// <summary>Una unidad con conversiones activas no se desactiva: dejaría conversiones apuntando a una unidad inactiva.</summary>
+public sealed class UnidadMedidaReglas(IReferencias referencias)
+    : IReglasCatalogo<UnidadMedidaDto, CrearUnidadMedidaDto, EditarUnidadMedidaDto>
+{
+    public Task ValidarCrearAsync(long empresaId, CrearUnidadMedidaDto dto, CancellationToken ct) => Task.CompletedTask;
+
+    public Task ValidarEditarAsync(long empresaId, UnidadMedidaDto anterior, EditarUnidadMedidaDto dto, CancellationToken ct) =>
+        Task.CompletedTask;
+
+    public async Task ValidarDesactivarAsync(long empresaId, UnidadMedidaDto anterior, CancellationToken ct)
+    {
+        if (await referencias.ContarDependientesActivosAsync(RelacionDependiente.ConversionesDeUnidad, anterior.Id, ct) > 0)
+            throw new ReglaNegocioException("TIENE_DEPENDIENTES", "La unidad tiene conversiones activas. Desactívelas primero.");
+    }
+}
+
 public sealed record BancoDto : CatalogoDto;
 
 public sealed record CrearBancoDto : CrearCatalogo;
@@ -320,3 +336,19 @@ public sealed record TipoDocumentoDto : CatalogoDto
 public sealed record CrearTipoDocumentoDto : CrearCatalogo;
 
 public sealed record EditarTipoDocumentoDto : EditarCatalogo;
+
+/// <summary>Un tipo de documento con series activas (de cualquier empresa) no se desactiva.</summary>
+public sealed class TipoDocumentoReglas(IReferencias referencias)
+    : IReglasCatalogo<TipoDocumentoDto, CrearTipoDocumentoDto, EditarTipoDocumentoDto>
+{
+    public Task ValidarCrearAsync(long empresaId, CrearTipoDocumentoDto dto, CancellationToken ct) => Task.CompletedTask;
+
+    public Task ValidarEditarAsync(long empresaId, TipoDocumentoDto anterior, EditarTipoDocumentoDto dto, CancellationToken ct) =>
+        Task.CompletedTask;
+
+    public async Task ValidarDesactivarAsync(long empresaId, TipoDocumentoDto anterior, CancellationToken ct)
+    {
+        if (await referencias.ContarDependientesActivosAsync(RelacionDependiente.SeriesDeTipoDocumento, anterior.Id, ct) > 0)
+            throw new ReglaNegocioException("TIENE_DEPENDIENTES", "El tipo de documento tiene series activas. Desactívelas primero.");
+    }
+}

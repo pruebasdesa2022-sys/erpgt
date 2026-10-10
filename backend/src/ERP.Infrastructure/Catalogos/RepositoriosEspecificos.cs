@@ -341,7 +341,24 @@ public sealed class NumeracionRepository(UnitOfWork uow) : RepositorioBase(uow),
             new Dapper.CommandDefinition("sp_siguiente_correlativo",
                 new { p_empresa_id = empresaId, p_serie_documento_id = serieId },
                 _unidadDeTrabajo.Transaccion, commandType: System.Data.CommandType.StoredProcedure, cancellationToken: ct));
-        return filas.FirstOrDefault();
+        var asignacion = filas.FirstOrDefault();
+        if (asignacion is null)
+            return null;
+
+        // La fila de la serie ya está bloqueada por el procedimiento: este SELECT no compite con nadie.
+        var alcance = await ConsultarUnoAsync<AlcanceSerieFila>(
+            "SELECT tipo_documento_id, sucursal_id, caja_id FROM serie_documento WHERE id = @serieId AND empresa_id = @empresaId",
+            new { serieId, empresaId }, ct);
+        return alcance is null
+            ? asignacion
+            : asignacion with { TipoDocumentoId = alcance.TipoDocumentoId, SucursalId = alcance.SucursalId, CajaId = alcance.CajaId };
+    }
+
+    private sealed record AlcanceSerieFila
+    {
+        public long TipoDocumentoId { get; init; }
+        public long? SucursalId { get; init; }
+        public long? CajaId { get; init; }
     }
 }
 
@@ -363,6 +380,10 @@ public sealed class ConfiguracionRepository(UnitOfWork unidadDeTrabajo) : Reposi
     public async Task EstablecerAsync(
         long empresaId, string clave, string? valor, string tipoDato, DateOnly hoy, long usuarioId, DateTime ahoraUtc, CancellationToken ct)
     {
+        // Serializa los cambios de configuración de la empresa: sin esto, dos primeras fijaciones del mismo día
+        // chocan en el UNIQUE (o se bloquean entre sí por el bloqueo de hueco).
+        await EscalarAsync<long>("SELECT id FROM empresa WHERE id = @empresaId" + ParaActualizar, new { empresaId }, ct);
+
         var ayer = hoy.AddDays(-1);
 
         // Se cierra el valor anterior (sin borrarlo: queda el historial de vigencias).
@@ -426,6 +447,11 @@ public sealed class ReferenciasRepository(UnitOfWork unidadDeTrabajo) : Reposito
         [RelacionDependiente.CuentasDeBanco] = "SELECT COUNT(*) FROM cuenta_bancaria WHERE banco_id = @padreId AND activo = 1",
         [RelacionDependiente.CuentasDeMoneda] = "SELECT COUNT(*) FROM cuenta_bancaria WHERE moneda_id = @padreId AND activo = 1",
         [RelacionDependiente.EmpresasDeMonedaLocal] = "SELECT COUNT(*) FROM empresa WHERE moneda_local_id = @padreId AND activo = 1",
+        [RelacionDependiente.ConversionesDeUnidad] =
+            "SELECT COUNT(*) FROM unidad_conversion WHERE (unidad_origen_id = @padreId OR unidad_destino_id = @padreId) AND activo = 1",
+        [RelacionDependiente.SeriesDeTipoDocumento] = "SELECT COUNT(*) FROM serie_documento WHERE tipo_documento_id = @padreId AND activo = 1",
+        [RelacionDependiente.SeriesDeSucursal] = "SELECT COUNT(*) FROM serie_documento WHERE sucursal_id = @padreId AND activo = 1",
+        [RelacionDependiente.SeriesDeCaja] = "SELECT COUNT(*) FROM serie_documento WHERE caja_id = @padreId AND activo = 1",
     };
 
     public async Task<bool> ExisteActivaAsync(EntidadReferencia entidad, long id, long empresaId, CancellationToken ct)

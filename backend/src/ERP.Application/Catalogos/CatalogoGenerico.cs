@@ -160,6 +160,10 @@ public enum RelacionDependiente
     CuentasDeBanco,
     CuentasDeMoneda,
     EmpresasDeMonedaLocal,
+    ConversionesDeUnidad,
+    SeriesDeTipoDocumento,
+    SeriesDeSucursal,
+    SeriesDeCaja,
 }
 
 /// <summary>Verificaciones de integridad entre catálogos que las reglas necesitan.</summary>

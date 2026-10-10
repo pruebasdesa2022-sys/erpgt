@@ -17,7 +17,7 @@ public class InstalacionTests(ApiFixture api)
         // 23 tablas de Fase 0 + 22 de la etapa 1A.
         Assert.Equal(45, await api.EscalarAsync<int>(
             "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = @b", ("@b", nombre)));
-        Assert.Equal("0.2.0", await api.EscalarAsync<string>("SELECT version FROM esquema_version WHERE script = 'database.sql'"));
+        Assert.Equal("0.2.1", await api.EscalarAsync<string>("SELECT version FROM esquema_version WHERE script = 'database.sql'"));
         Assert.Equal("Organización", await api.EscalarAsync<string>("SELECT nombre FROM modulo WHERE codigo = 'ORGANIZACION'"));
     }
 

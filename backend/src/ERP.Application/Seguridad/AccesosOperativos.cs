@@ -33,18 +33,22 @@ public sealed record MisAccesosOperativosDto(IReadOnlyList<AccesoBodegaDto> Bode
 
 public interface IAccesosOperativosRepository
 {
-    Task<bool> UsuarioExisteAsync(long usuarioId, CancellationToken ct);
+    /// <summary>El usuario existe y tiene acceso a la empresa; con bloqueo de su fila dentro de una transacción.</summary>
+    Task<bool> UsuarioEnEmpresaAsync(long usuarioId, long empresaId, CancellationToken ct);
 
-    Task<AccesosOperativosDto> ObtenerAsync(long usuarioId, CancellationToken ct);
+    /// <summary>Bodegas y cajas del usuario en esa empresa (las de otras empresas no se ven ni se tocan).</summary>
+    Task<AccesosOperativosDto> ObtenerAsync(long usuarioId, long empresaId, CancellationToken ct);
 
     /// <summary>
-    /// Cuántas de las bodegas indicadas están activas y pertenecen a una sucursal a la que el usuario tiene acceso.
+    /// Cuántas de las bodegas indicadas están activas, son de la empresa y pertenecen a una sucursal a la que el
+    /// usuario tiene acceso.
     /// </summary>
-    Task<int> ContarBodegasAsignablesAsync(long usuarioId, IReadOnlyCollection<long> bodegaIds, CancellationToken ct);
+    Task<int> ContarBodegasAsignablesAsync(long usuarioId, long empresaId, IReadOnlyCollection<long> bodegaIds, CancellationToken ct);
 
-    Task<int> ContarCajasAsignablesAsync(long usuarioId, IReadOnlyCollection<long> cajaIds, CancellationToken ct);
+    Task<int> ContarCajasAsignablesAsync(long usuarioId, long empresaId, IReadOnlyCollection<long> cajaIds, CancellationToken ct);
 
-    Task ReemplazarAsync(long usuarioId, IReadOnlyList<long> bodegaIds, IReadOnlyList<long> cajaIds, long por, CancellationToken ct);
+    /// <summary>Reemplaza solo las bodegas y cajas de la empresa; las de otras empresas quedan intactas.</summary>
+    Task ReemplazarAsync(long usuarioId, long empresaId, IReadOnlyList<long> bodegaIds, IReadOnlyList<long> cajaIds, long por, CancellationToken ct);
 
     Task<MisAccesosOperativosDto> ListarDeEmpresaAsync(long usuarioId, long empresaId, CancellationToken ct);
 }
@@ -57,34 +61,36 @@ public sealed class AccesosOperativosService(
 {
     public async Task<AccesosOperativosDto> ObtenerAsync(long usuarioId, CancellationToken ct)
     {
-        if (!await repositorio.UsuarioExisteAsync(usuarioId, ct))
-            throw new NoEncontradoException("El usuario no existe.");
+        var empresaId = actual.EmpresaIdRequerida();
+        if (!await repositorio.UsuarioEnEmpresaAsync(usuarioId, empresaId, ct))
+            throw new NoEncontradoException("El usuario no existe en la empresa activa.");
 
-        return await repositorio.ObtenerAsync(usuarioId, ct);
+        return await repositorio.ObtenerAsync(usuarioId, empresaId, ct);
     }
 
     public Task<AccesosOperativosDto> GuardarAsync(long usuarioId, GuardarAccesosOperativosDto dto, CancellationToken ct)
     {
         var por = actual.UsuarioIdRequerido();
+        var empresaId = actual.EmpresaIdRequerida();
         var bodegas = dto.BodegaIds.Distinct().ToList();
         var cajas = dto.CajaIds.Distinct().ToList();
 
         return unidadDeTrabajo.EjecutarEnTransaccionAsync(async () =>
         {
-            if (!await repositorio.UsuarioExisteAsync(usuarioId, ct))
-                throw new NoEncontradoException("El usuario no existe.");
+            if (!await repositorio.UsuarioEnEmpresaAsync(usuarioId, empresaId, ct))
+                throw new NoEncontradoException("El usuario no existe en la empresa activa.");
 
             var errores = new Dictionary<string, string[]>();
-            if (await repositorio.ContarBodegasAsignablesAsync(usuarioId, bodegas, ct) != bodegas.Count)
-                errores["bodegaIds"] = ["Cada bodega debe estar activa y pertenecer a una sucursal a la que el usuario tiene acceso."];
-            if (await repositorio.ContarCajasAsignablesAsync(usuarioId, cajas, ct) != cajas.Count)
-                errores["cajaIds"] = ["Cada caja debe estar activa y pertenecer a una sucursal a la que el usuario tiene acceso."];
+            if (await repositorio.ContarBodegasAsignablesAsync(usuarioId, empresaId, bodegas, ct) != bodegas.Count)
+                errores["bodegaIds"] = ["Cada bodega debe estar activa, ser de la empresa y pertenecer a una sucursal a la que el usuario tiene acceso."];
+            if (await repositorio.ContarCajasAsignablesAsync(usuarioId, empresaId, cajas, ct) != cajas.Count)
+                errores["cajaIds"] = ["Cada caja debe estar activa, ser de la empresa y pertenecer a una sucursal a la que el usuario tiene acceso."];
             if (errores.Count > 0)
                 throw new ValidacionException(errores);
 
-            var anterior = await repositorio.ObtenerAsync(usuarioId, ct);
-            await repositorio.ReemplazarAsync(usuarioId, bodegas, cajas, por, ct);
-            var nuevo = await repositorio.ObtenerAsync(usuarioId, ct);
+            var anterior = await repositorio.ObtenerAsync(usuarioId, empresaId, ct);
+            await repositorio.ReemplazarAsync(usuarioId, empresaId, bodegas, cajas, por, ct);
+            var nuevo = await repositorio.ObtenerAsync(usuarioId, empresaId, ct);
 
             await auditoria.RegistrarAsync(
                 new RegistroAuditoria("SEGURIDAD", "usuario_acceso_operativo", usuarioId.ToString(), "EDITAR", anterior, nuevo), ct);

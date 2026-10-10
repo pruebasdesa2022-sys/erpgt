@@ -636,17 +636,21 @@ public class NumeracionTests(ApiFixture api)
     private async Task<long> SiguienteGuardadoAsync(long serieId) =>
         await api.EscalarAsync<long>("SELECT siguiente_correlativo FROM serie_documento WHERE id = @i", ("@i", serieId));
 
+    /// <summary>Documento emitido en la sucursal principal; las series de estas pruebas son de toda la empresa.</summary>
+    private async Task<AlcanceDocumento> AlcanceAsync(string tipo = "FACTURA_VENTA") => new(await TipoDocumentoAsync(tipo), 1, null);
+
     [Fact]
     public async Task Cincuenta_asignaciones_concurrentes_no_saltan_ni_repiten_numeros()
     {
         var admin = await api.ClienteAdminAsync();
         var serieId = await CrearSerieAsync(admin, Ayudas.Codigo("C", 8), siguiente: 100);
+        var doc = await AlcanceAsync();
 
         var tareas = Enumerable.Range(0, 50).Select(_ => Task.Run(async () =>
         {
             await using var alcance = api.Servicios.CreateAsyncScope();
             var numeracion = alcance.ServiceProvider.GetRequiredService<INumeracion>();
-            return (await numeracion.SiguienteAsync(1, serieId, new DateOnly(2026, 10, 10), CancellationToken.None)).Numero;
+            return (await numeracion.SiguienteAsync(1, serieId, doc, new DateOnly(2026, 10, 10), CancellationToken.None)).Numero;
         })).ToArray();
 
         var numeros = (await Task.WhenAll(tareas)).Order().ToArray();
@@ -660,6 +664,7 @@ public class NumeracionTests(ApiFixture api)
     {
         var admin = await api.ClienteAdminAsync();
         var serieId = await CrearSerieAsync(admin, Ayudas.Codigo("R", 8));
+        var doc = await AlcanceAsync();
 
         await using (var alcance = api.Servicios.CreateAsyncScope())
         {
@@ -668,7 +673,7 @@ public class NumeracionTests(ApiFixture api)
 
             await Assert.ThrowsAsync<InvalidOperationException>(() => unidad.EjecutarEnTransaccionAsync(async () =>
             {
-                var asignado = await numeracion.SiguienteAsync(1, serieId, new DateOnly(2026, 10, 10), CancellationToken.None);
+                var asignado = await numeracion.SiguienteAsync(1, serieId, doc, new DateOnly(2026, 10, 10), CancellationToken.None);
                 Assert.Equal(1, asignado.Numero);
                 throw new InvalidOperationException("el documento falló después de numerarse");
             }));
@@ -678,7 +683,7 @@ public class NumeracionTests(ApiFixture api)
 
         await using var otro = api.Servicios.CreateAsyncScope();
         var siguiente = await otro.ServiceProvider.GetRequiredService<INumeracion>()
-            .SiguienteAsync(1, serieId, new DateOnly(2026, 10, 10), CancellationToken.None);
+            .SiguienteAsync(1, serieId, doc, new DateOnly(2026, 10, 10), CancellationToken.None);
         Assert.Equal(1, siguiente.Numero);
     }
 
@@ -690,20 +695,21 @@ public class NumeracionTests(ApiFixture api)
         var vencida = await CrearSerieAsync(admin, Ayudas.Codigo("V", 8), desde: "2026-01-01", hasta: "2026-06-30");
         var futura = await CrearSerieAsync(admin, Ayudas.Codigo("F", 8), desde: "2027-01-01");
         var inactiva = await CrearSerieAsync(admin, Ayudas.Codigo("I", 8));
+        var doc = await AlcanceAsync();
         Assert.Equal(HttpStatusCode.NoContent, (await admin.DeleteAsync($"{Series}/{inactiva}?versionFila=1")).StatusCode);
 
         async Task<ErpException> Falla(long serieId)
         {
             await using var alcance = api.Servicios.CreateAsyncScope();
             return await Assert.ThrowsAnyAsync<ErpException>(() => alcance.ServiceProvider.GetRequiredService<INumeracion>()
-                .SiguienteAsync(1, serieId, new DateOnly(2026, 10, 10), CancellationToken.None));
+                .SiguienteAsync(1, serieId, doc, new DateOnly(2026, 10, 10), CancellationToken.None));
         }
 
         async Task<long> Asigna(long serieId)
         {
             await using var alcance = api.Servicios.CreateAsyncScope();
             return (await alcance.ServiceProvider.GetRequiredService<INumeracion>()
-                .SiguienteAsync(1, serieId, new DateOnly(2026, 10, 10), CancellationToken.None)).Numero;
+                .SiguienteAsync(1, serieId, doc, new DateOnly(2026, 10, 10), CancellationToken.None)).Numero;
         }
 
         Assert.Equal(1, await Asigna(agotada));
@@ -726,10 +732,11 @@ public class NumeracionTests(ApiFixture api)
         var admin = await api.ClienteAdminAsync();
         var serie = Ayudas.Codigo("S", 6);
         var serieId = await CrearSerieAsync(admin, serie, siguiente: 7, prefijo: "fac", incluirAnio: true, tipo: "FACTURA_COMPRA");
+        var doc = await AlcanceAsync("FACTURA_COMPRA");
 
         await using var alcance = api.Servicios.CreateAsyncScope();
         var asignado = await alcance.ServiceProvider.GetRequiredService<INumeracion>()
-            .SiguienteAsync(1, serieId, new DateOnly(2026, 10, 10), CancellationToken.None);
+            .SiguienteAsync(1, serieId, doc, new DateOnly(2026, 10, 10), CancellationToken.None);
 
         Assert.Equal($"FAC-2026-{serie}-000007", asignado.NumeroFormateado);
     }
@@ -739,6 +746,7 @@ public class NumeracionTests(ApiFixture api)
     {
         var admin = await api.ClienteAdminAsync();
         var serieId = await CrearSerieAsync(admin, Ayudas.Codigo("E", 8), siguiente: 50, maximo: 100);
+        var doc = await AlcanceAsync();
 
         var bajoLoEmitido = await admin.PutAsJsonAsync($"{Series}/{serieId}", new { numeroMaximo = 10, vigenteHasta = (string?)null, activo = true, versionFila = 1 });
         Assert.Equal((HttpStatusCode)422, bajoLoEmitido.StatusCode);
@@ -752,7 +760,7 @@ public class NumeracionTests(ApiFixture api)
 
         // Editar la serie mientras se emiten documentos no pisa el correlativo en curso.
         await using (var alcance = api.Servicios.CreateAsyncScope())
-            await alcance.ServiceProvider.GetRequiredService<INumeracion>().SiguienteAsync(1, serieId, new DateOnly(2026, 10, 10), CancellationToken.None);
+            await alcance.ServiceProvider.GetRequiredService<INumeracion>().SiguienteAsync(1, serieId, doc, new DateOnly(2026, 10, 10), CancellationToken.None);
         var otra = await admin.PutAsJsonAsync($"{Series}/{serieId}", new { numeroMaximo = 600, vigenteHasta = "2026-12-31", activo = true, versionFila = 2 });
         Assert.Equal(51, (await otra.LeerAsync()).GetProperty("siguienteCorrelativo").GetInt64());
     }

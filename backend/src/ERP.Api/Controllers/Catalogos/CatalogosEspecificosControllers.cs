@@ -187,7 +187,7 @@ public sealed class TiposDocumentoController(CatalogoService<TipoDocumentoDto, C
     public Task<TipoDocumentoDto> Obtener(long id, CancellationToken ct) => servicio.ObtenerAsync(id, ct);
 
     [HttpPut("{id:long}")]
-    [RequierePermiso("CATALOGOS_TIPOSDOCUMENTO_EDITAR")]
+    [RequierePermiso("CATALOGOS_GLOBALES_EDITAR")]
     public Task<TipoDocumentoDto> Editar(long id, EditarTipoDocumentoDto dto, CancellationToken ct) => servicio.EditarAsync(id, dto, ct);
 }
 

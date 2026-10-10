@@ -621,7 +621,7 @@ public sealed class MonedasController(CatalogoService<MonedaDto, CrearMonedaDto,
     public Task<MonedaDto> Obtener(long id, CancellationToken ct) => servicio.ObtenerAsync(id, ct);
 
     [HttpPost]
-    [RequierePermiso("CATALOGOS_MONEDAS_CREAR")]
+    [RequierePermiso("CATALOGOS_GLOBALES_EDITAR")]
     public async Task<IActionResult> Crear(CrearMonedaDto dto, CancellationToken ct)
     {
         var creado = await servicio.CrearAsync(dto, ct);
@@ -629,12 +629,12 @@ public sealed class MonedasController(CatalogoService<MonedaDto, CrearMonedaDto,
     }
 
     [HttpPut("{id:long}")]
-    [RequierePermiso("CATALOGOS_MONEDAS_EDITAR")]
+    [RequierePermiso("CATALOGOS_GLOBALES_EDITAR")]
     public Task<MonedaDto> Editar(long id, EditarMonedaDto dto, CancellationToken ct) => servicio.EditarAsync(id, dto, ct);
 
     /// <summary>Baja lógica. Requiere la versión de la fila para detectar ediciones concurrentes.</summary>
     [HttpDelete("{id:long}")]
-    [RequierePermiso("CATALOGOS_MONEDAS_ELIMINAR")]
+    [RequierePermiso("CATALOGOS_GLOBALES_EDITAR")]
     public async Task<IActionResult> Desactivar(long id, [FromQuery] uint versionFila, CancellationToken ct)
     {
         await servicio.DesactivarAsync(id, versionFila, ct);

@@ -378,14 +378,22 @@ public sealed class SeriesDocumentoService(
 
 public sealed record NumeroAsignado(long SerieId, string Serie, long Numero, string NumeroFormateado);
 
+/// <summary>
+/// Lo que el documento que pide el número es: su tipo y dónde se emite. La serie solo sirve si coincide:
+/// una serie de otro tipo, de otra sucursal o de otra caja no se puede consumir con solo conocer su id.
+/// </summary>
+public sealed record AlcanceDocumento(long TipoDocumentoId, long SucursalId, long? CajaId);
+
 public interface INumeracion
 {
     /// <summary>
     /// Asigna el siguiente número de la serie, sin saltos ni duplicados bajo concurrencia. Debe llamarse
     /// dentro de la transacción del documento: si el documento se revierte, el número vuelve a la serie.
-    /// Rechaza (422) series inactivas, fuera de vigencia a <paramref name="fechaDocumento"/> o agotadas.
+    /// Rechaza (422) series inactivas, fuera de vigencia a <paramref name="fechaDocumento"/>, agotadas o
+    /// que no corresponden al tipo, la sucursal o la caja del documento.
     /// </summary>
-    Task<NumeroAsignado> SiguienteAsync(long empresaId, long serieId, DateOnly fechaDocumento, CancellationToken ct);
+    Task<NumeroAsignado> SiguienteAsync(
+        long empresaId, long serieId, AlcanceDocumento alcance, DateOnly fechaDocumento, CancellationToken ct);
 }
 
 /// <summary>Resultado de <c>sp_siguiente_correlativo</c>: el número asignado y los datos para validarlo y formatearlo.</summary>
@@ -401,6 +409,11 @@ public sealed record AsignacionSerie
     public DateOnly? VigenteHasta { get; init; }
     public bool Activo { get; init; }
     public long Numero { get; init; }
+
+    // Alcance de la serie: no vienen del procedimiento; el repositorio los completa.
+    public long TipoDocumentoId { get; init; }
+    public long? SucursalId { get; init; }
+    public long? CajaId { get; init; }
 }
 
 public interface INumeracionRepository
@@ -412,7 +425,8 @@ public interface INumeracionRepository
 public sealed class NumeracionService(INumeracionRepository repositorio, IUnitOfWork unidadDeTrabajo) : INumeracion
 {
     // Dentro de la transacción del documento esto se une a ella; suelto, es atómico por sí mismo.
-    public Task<NumeroAsignado> SiguienteAsync(long empresaId, long serieId, DateOnly fechaDocumento, CancellationToken ct) =>
+    public Task<NumeroAsignado> SiguienteAsync(
+        long empresaId, long serieId, AlcanceDocumento alcance, DateOnly fechaDocumento, CancellationToken ct) =>
         unidadDeTrabajo.EjecutarEnTransaccionAsync(async () =>
         {
             var serie = await repositorio.AvanzarAsync(empresaId, serieId, ct)
@@ -421,6 +435,14 @@ public sealed class NumeracionService(INumeracionRepository repositorio, IUnitOf
             // Estas validaciones lanzan DESPUÉS de avanzar: el rollback de la transacción devuelve el número.
             if (!serie.Activo)
                 throw new ReglaNegocioException("SERIE_INACTIVA", $"La serie {serie.Serie} está inactiva.");
+
+            if (serie.TipoDocumentoId != alcance.TipoDocumentoId)
+                throw new ReglaNegocioException("SERIE_TIPO_INCORRECTO", $"La serie {serie.Serie} no es de este tipo de documento.");
+
+            if ((serie.SucursalId is not null && serie.SucursalId != alcance.SucursalId)
+                || (serie.CajaId is not null && serie.CajaId != alcance.CajaId))
+                throw new ReglaNegocioException("SERIE_FUERA_DE_ALCANCE",
+                    $"La serie {serie.Serie} no se puede usar en esta sucursal o caja.");
 
             if (!Vigencias.Contiene(serie.VigenteDesde, serie.VigenteHasta, fechaDocumento))
                 throw new ReglaNegocioException("SERIE_FUERA_DE_VIGENCIA",

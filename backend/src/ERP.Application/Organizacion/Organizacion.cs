@@ -200,6 +200,10 @@ public sealed class EmpresasService(
             if (!(await accesos.EmpresasPermitidasAsync(ct)).Contains(id))
                 throw new NoEncontradoException("La empresa no existe.");
 
+            // El permiso se resolvió para la empresa activa: solo esa empresa se edita con él.
+            if (id != actual.EmpresaIdRequerida())
+                throw new AccesoDenegadoException("EMPRESA_NO_ACTIVA", "Cambie a esa empresa para editar sus datos.");
+
             var anterior = await repositorio.ObtenerAsync(id, ct) ?? throw new NoEncontradoException("La empresa no existe.");
 
             if (!await referencias.ExisteActivaAsync(EntidadReferencia.Moneda, limpio.MonedaLocalId, id, ct))
@@ -294,9 +298,10 @@ public sealed class SucursalesService(
 
             if (anterior.Activo && !limpio.Activo
                 && (await referencias.ContarDependientesActivosAsync(RelacionDependiente.BodegasDeSucursal, id, ct)
-                    + await referencias.ContarDependientesActivosAsync(RelacionDependiente.CajasDeSucursal, id, ct)) > 0)
+                    + await referencias.ContarDependientesActivosAsync(RelacionDependiente.CajasDeSucursal, id, ct)
+                    + await referencias.ContarDependientesActivosAsync(RelacionDependiente.SeriesDeSucursal, id, ct)) > 0)
                 throw new ReglaNegocioException("TIENE_DEPENDIENTES",
-                    "La sucursal tiene bodegas o cajas activas. Desactívelas primero.");
+                    "La sucursal tiene bodegas, cajas o series de documentos activas. Desactívelas primero.");
 
             if (!await repositorio.ActualizarAsync(empresaId, id, limpio, usuarioId, reloj.UtcNow, ct))
                 throw ConflictoException.Concurrencia();

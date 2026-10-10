@@ -73,6 +73,11 @@ export interface ConfigCatalogo {
   recurso: string;
   /** Prefijo de permisos: {permiso}_VER, _CREAR, _EDITAR, _ELIMINAR, _EXPORTAR. */
   permiso: string;
+  /**
+   * Permiso único para crear, editar y dar de baja, cuando el catálogo es global (lo comparten todas las
+   * empresas) y solo el administrador lo administra. Reemplaza a {permiso}_CREAR/_EDITAR/_ELIMINAR.
+   */
+  permisoEscritura?: string;
   columnas: ColumnaCatalogo[];
   campos: CampoCatalogo[];
   ordenInicial: string;

@@ -97,6 +97,7 @@ internal static class ReglasDeTasa
 public sealed class TiposCambioService(
     ITipoCambioRepository repositorio,
     IReferencias referencias,
+    IPeriodoBloqueo periodo,
     IUnitOfWork unidadDeTrabajo,
     IAuditoria auditoria,
     IUsuarioActual actual,
@@ -125,6 +126,9 @@ public sealed class TiposCambioService(
 
         return unidadDeTrabajo.EjecutarEnTransaccionAsync(async () =>
         {
+            // Una tasa en un período cerrado cambiaría la valoración de lo ya cerrado.
+            await periodo.ValidarFechaAsync(empresaId, dto.Fecha, ct);
+
             if (!await referencias.ExisteActivaAsync(EntidadReferencia.Moneda, dto.MonedaId, empresaId, ct))
                 throw new ValidacionException("monedaId", "La moneda no existe o está inactiva.");
 
@@ -148,6 +152,8 @@ public sealed class TiposCambioService(
         {
             var anterior = await repositorio.ObtenerAsync(empresaId, id, ct)
                 ?? throw new NoEncontradoException("El tipo de cambio no existe.");
+
+            await periodo.ValidarFechaAsync(empresaId, anterior.Fecha, ct);
 
             if (!await repositorio.ActualizarAsync(empresaId, id, dto, usuarioId, reloj.UtcNow, ct))
                 throw ConflictoException.Concurrencia();
@@ -255,6 +261,7 @@ public interface IImpuestoRepository
 
 public sealed class ImpuestosService(
     IImpuestoRepository repositorio,
+    IPeriodoBloqueo periodo,
     IUnitOfWork unidadDeTrabajo,
     IAuditoria auditoria,
     IUsuarioActual actual,
@@ -279,6 +286,9 @@ public sealed class ImpuestosService(
 
         return unidadDeTrabajo.EjecutarEnTransaccionAsync(async () =>
         {
+            // Una vigencia que empieza en un período cerrado cambiaría el impuesto aplicado a lo ya cerrado.
+            await periodo.ValidarFechaAsync(empresaId, limpio.VigenteDesde, ct);
+
             var vigencias = await repositorio.VigenciasActivasAsync(empresaId, limpio.Codigo, ct);
             if (vigencias.Any(v => v.VigenteDesde == limpio.VigenteDesde))
                 throw new ConflictoException("DUPLICADO", $"Ya existe una vigencia de {limpio.Codigo} que inicia en esa fecha.");
@@ -305,6 +315,10 @@ public sealed class ImpuestosService(
 
             if (limpio.VigenteHasta is not null && limpio.VigenteHasta < anterior.VigenteDesde)
                 throw new ValidacionException("vigenteHasta", "La vigencia no puede terminar antes de empezar.");
+
+            var primerDiaAfectado = PrimerDiaAfectado(anterior, limpio);
+            if (primerDiaAfectado is { } dia)
+                await periodo.ValidarFechaAsync(empresaId, dia, ct);
 
             // Solo importa el traslape si el registro queda activo.
             if (limpio.Activo)
@@ -338,6 +352,32 @@ public sealed class ImpuestosService(
         await auditoria.RegistrarAsync(
             new RegistroAuditoria(Modulo, Entidad, null, "EXPORTAR", Mensaje: $"{filas.Count} filas exportadas"), ct);
         return filas;
+    }
+
+    /// <summary>
+    /// Primer día cuyo impuesto aplicable cambia con la edición; nulo si no cambia ninguno (solo el nombre).
+    /// Activar o desactivar afecta toda la vigencia; mover el fin afecta los días entre el fin viejo y el nuevo.
+    /// </summary>
+    private static DateOnly? PrimerDiaAfectado(ImpuestoDto anterior, EditarImpuestoDto nuevo)
+    {
+        if (!anterior.Activo && !nuevo.Activo)
+            return null;
+
+        if (anterior.Activo != nuevo.Activo)
+            return anterior.VigenteDesde;
+
+        if (anterior.VigenteHasta == nuevo.VigenteHasta)
+            return null;
+
+        // Un fin nulo es "sin fin": el cambio empieza el día siguiente al fin que sí existe.
+        var menor = (anterior.VigenteHasta, nuevo.VigenteHasta) switch
+        {
+            (null, { } hasta) => hasta,
+            ({ } hasta, null) => hasta,
+            ({ } a, { } b) => a < b ? a : b,
+            _ => anterior.VigenteDesde,
+        };
+        return menor.AddDays(1);
     }
 
     private static void VerificarSinTraslape(IReadOnlyList<VigenciaImpuesto> vigencias, long idPropio, DateOnly desde, DateOnly? hasta)

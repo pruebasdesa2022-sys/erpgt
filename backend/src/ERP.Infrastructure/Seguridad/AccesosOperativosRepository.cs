@@ -5,19 +5,28 @@ namespace ERP.Infrastructure.Seguridad;
 
 public sealed class AccesosOperativosRepository(UnitOfWork unidadDeTrabajo) : RepositorioBase(unidadDeTrabajo), IAccesosOperativosRepository
 {
-    public async Task<bool> UsuarioExisteAsync(long usuarioId, CancellationToken ct) =>
-        await EscalarAsync<long>($"SELECT COUNT(*) FROM usuario WHERE id = @usuarioId{ParaActualizar}", new { usuarioId }, ct) > 0;
+    public async Task<bool> UsuarioEnEmpresaAsync(long usuarioId, long empresaId, CancellationToken ct) =>
+        await EscalarAsync<long>(
+            "SELECT COUNT(*) FROM usuario u JOIN usuario_empresa ue ON ue.usuario_id = u.id AND ue.empresa_id = @empresaId " +
+            $"WHERE u.id = @usuarioId{(EnTransaccion ? " FOR UPDATE OF u" : "")}",
+            new { usuarioId, empresaId }, ct) > 0;
 
-    public async Task<AccesosOperativosDto> ObtenerAsync(long usuarioId, CancellationToken ct) =>
+    public async Task<AccesosOperativosDto> ObtenerAsync(long usuarioId, long empresaId, CancellationToken ct) =>
         new(
             await ConsultarAsync<long>(
-                "SELECT CAST(bodega_id AS SIGNED) FROM usuario_bodega WHERE usuario_id = @usuarioId ORDER BY es_predeterminada DESC, id",
-                new { usuarioId }, ct),
+                """
+                SELECT CAST(ub.bodega_id AS SIGNED)
+                FROM usuario_bodega ub JOIN bodega b ON b.id = ub.bodega_id AND b.empresa_id = @empresaId
+                WHERE ub.usuario_id = @usuarioId ORDER BY ub.es_predeterminada DESC, ub.id
+                """, new { usuarioId, empresaId }, ct),
             await ConsultarAsync<long>(
-                "SELECT CAST(caja_id AS SIGNED) FROM usuario_caja WHERE usuario_id = @usuarioId ORDER BY es_predeterminada DESC, id",
-                new { usuarioId }, ct));
+                """
+                SELECT CAST(uc.caja_id AS SIGNED)
+                FROM usuario_caja uc JOIN caja c ON c.id = uc.caja_id AND c.empresa_id = @empresaId
+                WHERE uc.usuario_id = @usuarioId ORDER BY uc.es_predeterminada DESC, uc.id
+                """, new { usuarioId, empresaId }, ct));
 
-    public async Task<int> ContarBodegasAsignablesAsync(long usuarioId, IReadOnlyCollection<long> bodegaIds, CancellationToken ct)
+    public async Task<int> ContarBodegasAsignablesAsync(long usuarioId, long empresaId, IReadOnlyCollection<long> bodegaIds, CancellationToken ct)
     {
         if (bodegaIds.Count == 0)
             return 0;
@@ -27,12 +36,11 @@ public sealed class AccesosOperativosRepository(UnitOfWork unidadDeTrabajo) : Re
             SELECT COUNT(*)
             FROM bodega b
             JOIN usuario_sucursal us ON us.sucursal_id = b.sucursal_id AND us.usuario_id = @usuarioId
-            JOIN usuario_empresa ue ON ue.empresa_id = b.empresa_id AND ue.usuario_id = @usuarioId
-            WHERE b.id IN @bodegaIds AND b.activo = 1
-            """, new { usuarioId, bodegaIds }, ct);
+            WHERE b.id IN @bodegaIds AND b.empresa_id = @empresaId AND b.activo = 1
+            """, new { usuarioId, empresaId, bodegaIds }, ct);
     }
 
-    public async Task<int> ContarCajasAsignablesAsync(long usuarioId, IReadOnlyCollection<long> cajaIds, CancellationToken ct)
+    public async Task<int> ContarCajasAsignablesAsync(long usuarioId, long empresaId, IReadOnlyCollection<long> cajaIds, CancellationToken ct)
     {
         if (cajaIds.Count == 0)
             return 0;
@@ -42,15 +50,19 @@ public sealed class AccesosOperativosRepository(UnitOfWork unidadDeTrabajo) : Re
             SELECT COUNT(*)
             FROM caja c
             JOIN usuario_sucursal us ON us.sucursal_id = c.sucursal_id AND us.usuario_id = @usuarioId
-            JOIN usuario_empresa ue ON ue.empresa_id = c.empresa_id AND ue.usuario_id = @usuarioId
-            WHERE c.id IN @cajaIds AND c.activo = 1
-            """, new { usuarioId, cajaIds }, ct);
+            WHERE c.id IN @cajaIds AND c.empresa_id = @empresaId AND c.activo = 1
+            """, new { usuarioId, empresaId, cajaIds }, ct);
     }
 
-    public async Task ReemplazarAsync(long usuarioId, IReadOnlyList<long> bodegaIds, IReadOnlyList<long> cajaIds, long por, CancellationToken ct)
+    public async Task ReemplazarAsync(long usuarioId, long empresaId, IReadOnlyList<long> bodegaIds, IReadOnlyList<long> cajaIds, long por, CancellationToken ct)
     {
-        await EjecutarAsync("DELETE FROM usuario_bodega WHERE usuario_id = @usuarioId", new { usuarioId }, ct);
-        await EjecutarAsync("DELETE FROM usuario_caja WHERE usuario_id = @usuarioId", new { usuarioId }, ct);
+        // Solo las filas de esta empresa: las bodegas y cajas que el usuario tenga en otras empresas no se tocan.
+        await EjecutarAsync(
+            "DELETE ub FROM usuario_bodega ub JOIN bodega b ON b.id = ub.bodega_id WHERE ub.usuario_id = @usuarioId AND b.empresa_id = @empresaId",
+            new { usuarioId, empresaId }, ct);
+        await EjecutarAsync(
+            "DELETE uc FROM usuario_caja uc JOIN caja c ON c.id = uc.caja_id WHERE uc.usuario_id = @usuarioId AND c.empresa_id = @empresaId",
+            new { usuarioId, empresaId }, ct);
 
         if (bodegaIds.Count > 0)
             await EjecutarAsync(

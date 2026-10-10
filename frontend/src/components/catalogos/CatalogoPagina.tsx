@@ -125,13 +125,13 @@ export function CatalogoPagina({ config }: { config: ConfigCatalogo }) {
         if (config.soloLectura?.(f)) return null;
         return (
           <div className="flex justify-end gap-1">
-            <Puede permiso={`${config.permiso}_EDITAR`}>
+            <Puede permiso={config.permisoEscritura ?? `${config.permiso}_EDITAR`}>
               <Button variant="ghost" size="icon-sm" aria-label={`Editar ${nombreDe(f)}`} onClick={() => setEnEdicion(f)}>
                 <Pencil />
               </Button>
             </Puede>
             {!config.sinBaja && f.activo !== false && (
-              <Puede permiso={`${config.permiso}_ELIMINAR`}>
+              <Puede permiso={config.permisoEscritura ?? `${config.permiso}_ELIMINAR`}>
                 <Button variant="ghost" size="icon-sm" aria-label={`Desactivar ${nombreDe(f)}`} onClick={() => setPorDesactivar(f)}>
                   <Trash2 />
                 </Button>
@@ -160,7 +160,7 @@ export function CatalogoPagina({ config }: { config: ConfigCatalogo }) {
           </Puede>
         )}
         {!config.sinCrear && (
-          <Puede permiso={`${config.permiso}_CREAR`}>
+          <Puede permiso={config.permisoEscritura ?? `${config.permiso}_CREAR`}>
             <Button onClick={() => setEnEdicion("nueva")}>
               <Plus />
               {config.femenino ? "Nueva" : "Nuevo"} {config.singular}
