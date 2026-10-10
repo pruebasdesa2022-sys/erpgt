@@ -1,0 +1,34 @@
+# Sistema y editores
+.DS_Store
+Thumbs.db
+.vs/
+*.user
+*.suo
+
+# .NET
+bin/
+obj/
+TestResults/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+.yarn/*
+!.yarn/patches
+!.yarn/releases
+!.yarn/plugins
+.pnp.*
+
+# Secretos y configuracion local (solo se versionan los archivos *.Example / *.example)
+.env
+.env.*
+!.env.example
+appsettings.Development.json
+appsettings.Production.json
+appsettings.QA.json
+
+# Logs y archivos subidos
+logs/
+*.log
+storage/
