@@ -197,6 +197,19 @@ Frontend (`frontend/package.json`; licencia leída del `package.json` de cada pa
 - **xUnit 2** (no 3): es la plantilla disponible en el SDK instalado.
 - No se agregó ninguna librería con licencia comercial.
 
+## ADR-025 — Correcciones de la revisión adversarial de 1A
+
+**Estado:** Aceptada (decisiones 6 y 7 del dueño; el resto, recomendaciones aceptadas) · 2026-10-10
+
+Sin dependencias nuevas.
+
+- **Catálogos globales solo para el administrador.** Monedas y tipos de documento los comparten todas las empresas: un cambio hecho desde una empresa afecta a las demás (por ejemplo, los decimales de una moneda cambian el redondeo del dinero). Se crea `CATALOGOS_GLOBALES_EDITAR`, concedido únicamente al rol ADMINISTRADOR, que reemplaza a `CATALOGOS_MONEDAS_CREAR/EDITAR/ELIMINAR` y `CATALOGOS_TIPOSDOCUMENTO_EDITAR` (se retiran de la base con el script `20261010_02`). Consultar sigue con `…_VER`. Consecuencia: el esquema pasa a 0.2.1 y quien tenía los permisos retirados los pierde.
+- **El bloqueo de período cubre los maestros que valoran documentos.** Un tipo de cambio no se crea ni corrige con fecha igual o anterior a `fecha_bloqueo`. Un impuesto no se crea con vigencia que empiece en un período cerrado, y activarlo, desactivarlo o mover el fin de su vigencia solo se permite si no cambia el impuesto aplicable a días cerrados; cambiar solo el nombre siempre se permite. Se interpretó «monedas» como el tipo de cambio: la moneda como catálogo ya queda reservada al administrador.
+- **La serie se valida contra el documento.** `INumeracion.SiguienteAsync` recibe `AlcanceDocumento` (tipo de documento, sucursal y caja). Una serie de otro tipo se rechaza con `SERIE_TIPO_INCORRECTO`; la de una sucursal o caja distinta, con `SERIE_FUERA_DE_ALCANCE`; la serie sin sucursal ni caja sirve en toda la empresa. El procedimiento almacenado no cambia: el repositorio lee el alcance con la fila ya bloqueada.
+- **Edición de empresa y accesos operativos.** El permiso se resuelve para la empresa activa, así que `PUT /empresas/{id}` solo vale para ella. Las asignaciones de bodega y caja se ven, validan y reemplazan únicamente dentro de la empresa activa.
+- **Configuración.** Los cambios de parámetros de una empresa se serializan bloqueando su fila de `empresa`, para que dos primeras fijaciones del mismo día no choquen en el UNIQUE.
+- **No se adoptó** impedir series activas traslapadas: ver `PROGRESO.md`, pendiente 18.
+
 ## ADR-024 — Decisiones de la etapa 1A (maestros y organización)
 
 **Estado:** Aceptada (plan aprobado por el dueño con los valores por defecto) · 2026-10-10

@@ -27,11 +27,14 @@ mysql -u root -p --default-character-set=utf8mb4 -e "source database/database.sq
 
 El script crea la base `erpgt`, las tablas y los datos indispensables. **Nunca se vuelve a ejecutar sobre una base con datos**: los cambios posteriores llegan como scripts en `database/updates/`.
 
-**Si ya tiene una base instalada** con una versión anterior, no ejecute `database.sql`: aplique, en orden y una sola vez, los scripts de `database/updates/` que le falten (el esquema instalado figura en la tabla `esquema_version`). Haga un respaldo antes de cada uno. Por ejemplo, de la 0.1.0 a la 0.2.0:
+**Si ya tiene una base instalada** con una versión anterior, no ejecute `database.sql`: aplique, en orden y una sola vez, los scripts de `database/updates/` que le falten (el esquema instalado figura en la tabla `esquema_version`). Haga un respaldo antes de cada uno. Por ejemplo, de la 0.1.0 a la 0.2.1 (la segunda línea solo cambia permisos; no crea tablas):
 
 ```powershell
-mysql -u root -p --default-character-set=utf8mb4 -e "source database/updates/20261010_01_fase_1a_maestros.sql"
+& "C:\Program Files\MySQL\MySQL Server 8.4\bin\mysql.exe" -u root -p --default-character-set=utf8mb4 -e "source database/updates/20261010_01_fase_1a_maestros.sql"
+& "C:\Program Files\MySQL\MySQL Server 8.4\bin\mysql.exe" -u root -p --default-character-set=utf8mb4 -e "source database/updates/20261010_02_permiso_catalogos_globales.sql"
 ```
+
+Si `mysql` no se reconoce en la terminal, su carpeta `bin` no está en el `PATH`: use la ruta completa como arriba.
 
 La aplicación no debe conectarse como `root`. `database/usuarios-ejemplo.sql` es la plantilla para crear su usuario de mínimo privilegio; tras un script incremental que cree tablas, otorgue también los privilegios de las tablas nuevas.
 

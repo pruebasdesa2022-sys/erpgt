@@ -9,7 +9,7 @@
 | **Etapa en curso** | **1A — Maestros y organización**: implementada (base de datos, backend y frontend). Pendiente de revisión y aprobación del dueño |
 | **Siguiente etapa** | 1B — Clientes, proveedores y productos. **No iniciar sin que el dueño lo pida** |
 | **Rama** | `fase-1a` (creada desde `fase-0`; ninguna está fusionada a `main`) |
-| **Esquema** | 0.2.0 — para una base 0.1.0 instalada: `database/updates/20261010_01_fase_1a_maestros.sql` (**la ejecuta el dueño**) |
+| **Esquema** | 0.2.1 — una base 0.1.0 necesita, en orden, `20261010_01_fase_1a_maestros.sql` y `20261010_02_permiso_catalogos_globales.sql`; una base 0.2.0 solo la segunda (**las ejecuta el dueño**) |
 | **Última actualización** | 2026-10-10 |
 
 ## Etapas
@@ -46,11 +46,27 @@
 | Comprobación | Resultado |
 |---|---|
 | `dotnet build ERP.sln` | Correcto, 0 advertencias |
-| `dotnet test` | 562 unitarias y de arquitectura + 73 de integración, todas pasan (incluye 50 asignaciones de correlativo concurrentes sin saltos ni repetidos, reversión del número, 8 altas simultáneas del mismo código y aislamiento entre empresas) |
+| `dotnet test` | 562 unitarias y de arquitectura + 86 de integración, todas pasan (incluye 50 asignaciones de correlativo concurrentes sin saltos ni repetidos, reversión del número, 8 altas simultáneas del mismo código, 8 cambios simultáneos de un parámetro y aislamiento entre empresas) |
 | `corepack yarn typecheck` / `lint` / `test` / `build` | Correctos; 133 pruebas de frontend |
 | `database.sql` 0.2.0 vs. 0.1.0 + script incremental | Esquemas idénticos (columnas, índices, FK, CHECK, rutinas) y mismos seeds; comparados en bases temporales |
 | Flujo real por el BFF contra una base temporal | 26 verificaciones: login y cambio de contraseña, menú, empresa (NIT), bodegas y cajas, marcas, exportación CSV, tipo de cambio, impuestos, unidades, series, fecha de bloqueo, configuración, bitácora y 401 sin cookie |
 | Recorrido de pantallas con Edge sin ventana | 23 pantallas y 4 interacciones sin errores de consola ni de red |
+
+### Correcciones de la revisión adversarial (2026-10-10)
+
+Aplicadas tras la revisión externa de 1A, sobre la misma rama. Cada una tiene prueba automática en `CatalogosCorreccionesTests.cs`:
+
+| Hallazgo | Corrección |
+|---|---|
+| A1 — editar otra empresa con el permiso de la activa | `PUT /organizacion/empresas/{id}` solo vale para la empresa activa (403 `EMPRESA_NO_ACTIVA`) |
+| A2/A3 — accesos de bodega y caja entre empresas | Se ven, validan y reemplazan solo los de la empresa activa; el usuario debe pertenecer a ella (404 si no) |
+| M1 — catálogos globales | Monedas y tipos de documento solo con `CATALOGOS_GLOBALES_EDITAR`, que concede únicamente el rol ADMINISTRADOR (ADR-025) |
+| M2 — baja con dependientes | No se desactiva una unidad con conversiones, un tipo de documento con series, ni una caja o sucursal con series activas |
+| M4 — alcance de la serie | `INumeracion` recibe tipo, sucursal y caja del documento y rechaza series de otro alcance (422) |
+| M5 — período bloqueado | Tipos de cambio e impuestos respetan `fecha_bloqueo` (422 `PERIODO_BLOQUEADO`) |
+| M6 — escrituras simultáneas de configuración | Se serializan por empresa; antes la segunda podía responder 500 |
+
+El script incremental `20261010_02` se comparó contra una instalación limpia 0.2.1 en bases temporales (mismos permisos, concesiones del administrador y menú) y se comprobó que no se puede ejecutar dos veces.
 
 **Sin verificar en 1A:** que la aplicación corra con el usuario MySQL de mínimo privilegio y que `EXECUTE` sobre `sp_siguiente_correlativo` funcione con él (la plantilla ya lo incluye; ver pendiente 1). El script incremental se verificó en bases temporales, no en `erpgt`.
 
@@ -82,6 +98,7 @@ Criterios de aceptación de `ESPECIFICACION.md §C1`:
 - **2026-10-10 — Fuera de Fase 0** (no estaban en `§C1`): pantalla para editar la política de contraseñas y los datos de la empresa (1A), listado y cierre de sesiones activas, idempotencia (`Idempotency-Key`, 1C).
 - **2026-10-10 — Decisiones de 1A** en ADR-024: motor genérico de catálogos, alcance global/empresa/estándar, `fecha_bloqueo` como «último día cerrado», categorías planas, tipos de documento cerrados, permisos de recurso de una palabra, accesos por bodega/caja sin contexto de sesión todavía.
 - **2026-10-10 — Archivos de Fase 0 tocados en 1A** (anunciados en el plan o necesarios): `SucursalesService` (no desactivar con dependientes), `Organizacion.cs` (`EmpresaDto` y edición de empresa), `UnitOfWork` (registro del manejador de `DateOnly`), `Barra` del frontend (parámetro opcional para ocultar la búsqueda), página de Usuarios (botón de bodegas y cajas) y, en pruebas, el instalador (`DELIMITER`) y dos pruebas que dependían del estado de `CATALOGOS` y del número de tablas.
+- **2026-10-10 — Decisiones tras la revisión adversarial** en ADR-025: catálogos globales solo para el administrador; el bloqueo de período cubre tipos de cambio e impuestos; la serie se valida contra el alcance del documento. Se **descartó**, con aviso al dueño, impedir series activas traslapadas del mismo tipo, sucursal y caja (ver pendiente 18).
 - Decisiones anteriores (diseño, esquema de Fase 0): ver `DECISIONES.md`.
 
 ## Pendientes y problemas conocidos
@@ -96,12 +113,16 @@ Criterios de aceptación de `ESPECIFICACION.md §C1`:
 8. `ESPECIFICACION.md §B2` conserva el orden antiguo de secciones del script; prevalece `CLAUDE.md §7`.
 9. `PROMPTS.md`, citado en la especificación, no existe en el proyecto.
 10. Los diagramas Mermaid de `DISENO.md` no se han comprobado en un visor.
-11. **Ejecutar el script incremental en `erpgt`** (lo hace el dueño): `mysql -u <usuario> -p --default-character-set=utf8mb4 -e "source database/updates/20261010_01_fase_1a_maestros.sql"`. Hacer respaldo antes: el DDL de MySQL no es transaccional y, si falla a mitad de camino, hay que restaurarlo. Después, otorgar al usuario de la aplicación los privilegios de las tablas nuevas.
+11. **Script incremental `20261010_02_permiso_catalogos_globales.sql` en `erpgt`** (lo hace el dueño; el `_01` ya se ejecutó). Solo cambia datos (permisos), no crea tablas: no requiere privilegios nuevos para el usuario de la aplicación. Después de aplicarlo, los usuarios que tenían los permisos retirados (`CATALOGOS_MONEDAS_CREAR/EDITAR/ELIMINAR`, `CATALOGOS_TIPOSDOCUMENTO_EDITAR`) los pierden; solo el rol ADMINISTRADOR queda con `CATALOGOS_GLOBALES_EDITAR`.
 12. **NIT de la empresa semilla:** es `CF` y el validador no lo acepta; al editar la empresa hay que capturar el NIT real.
 13. **Confirmar con el contador:** monto máximo de consumidor final (Q2,500 sembrado) e IVA 12 % sembrado con vigencia desde 2000-01-01.
 14. **Conversión estándar KG–LB** aproximada a 6 decimales (2.204623).
 15. **Bodega y caja activas en el contexto de sesión** y su validación por solicitud: se agregan con 1C y 1F.
-16. **Moneda local:** cambiarla no recalcula nada; solo es seguro antes de registrar documentos.
+16. **Moneda local:** cambiarla no recalcula nada; solo es seguro antes de registrar documentos. **Antes de cerrar 1C** debe bloquearse su cambio cuando existan movimientos o documentos (hoy no hay ninguno que lo impida).
+17. **Valores históricos en los documentos (1C en adelante):** cada documento debe guardar su propia tasa de cambio y su porcentaje de impuesto; editar o cerrar una vigencia no debe reinterpretar lo ya emitido. El bloqueo de período lo protege solo en períodos cerrados.
+18. **Series activas traslapadas.** No se impide tener dos series activas del mismo tipo, sucursal y caja con vigencias que se cruzan: `INumeracion` recibe el id de la serie, así que no hay ambigüedad al numerar, y prohibirlo impediría usar varias series a la vez (por ejemplo A y B). Falta definir en 1E cómo se elige la serie por defecto de una caja.
+19. **Bajos de la revisión sin aplicar** (no estaban en las correcciones aceptadas): aviso cuando la exportación llega a 10 000 filas; el CSV antepone `'` a textos que empiezan por `+` (teléfonos); enumeraciones duplicadas en backend, frontend y CHECK; tope de longitud de `bodegaIds` y `cajaIds`; formato del número cuando excede la longitud; el correlativo no se reinicia por año aunque la serie incluya el año; los selectores de un formulario consumen el listado de otro catálogo y exigen su permiso `VER`.
+20. **Rotar el `Jwt:Clave` de desarrollo** (`dotnet user-secrets set "Jwt:Clave" "<nueva>" --project src/ERP.Api`): se mostró en una salida de consola durante la etapa. No está en el repositorio.
 
 ## Comandos de verificación
 
