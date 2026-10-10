@@ -6,7 +6,7 @@
 -- con datos: los cambios posteriores van en database/updates/.
 --
 -- Version del esquema : 0.1.0 (Fase 0 - Fundamentos)
--- Motor               : MySQL 8.0.16 o superior (compatible con 8.4 LTS)
+-- Motor               : MySQL 8.4 LTS (verificado en 8.4.11)
 -- Ejecutar con        : un usuario con privilegios de DDL (no el de la app)
 --   PowerShell : mysql -u <usuario> -p --default-character-set=utf8mb4 -e "source database/database.sql"
 --   cmd / bash : mysql -u <usuario> -p --default-character-set=utf8mb4 < database/database.sql

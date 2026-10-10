@@ -6,68 +6,79 @@
 
 | | |
 |---|---|
-| **Etapa en curso** | **Fase 0 — Fundamentos**, solo la parte de base de datos |
-| **Estado** | `database/database.sql` (v0.1.0) escrito y revisado de forma estática. **Aún no se ha ejecutado en MySQL**: falta la prueba del dueño |
-| **Siguiente sesión** | Backend y frontend de Fase 0 (no iniciar sin que el dueño lo pida) |
-| **Última actualización** | 2026-10-09 |
+| **Etapa en curso** | **Fase 0 — Fundamentos**: implementada (base de datos, backend y frontend). Pendiente de revisión y aprobación del dueño |
+| **Siguiente etapa** | 1A — Maestros y organización. **No iniciar sin que el dueño lo pida** |
+| **Rama** | `fase-0` (sin fusionar a `main`) |
+| **Última actualización** | 2026-10-10 |
 
 ## Etapas
 
 | Etapa | Estado |
 |---|---|
 | Diseño (C0) | Aprobado |
-| Fase 0 — base de datos | Lista para probar |
-| Fase 0 — backend y frontend | Pendiente |
+| Fase 0 | Implementada — espera aprobación |
 | 1A · 1B · 1C · 1D · 1E · 1F · 1G | No iniciadas |
 | 1H (FEL, flotante) | Pendiente de certificador |
 | Fase 2 · Fase 3 | No iniciadas |
 
-## Base de datos de Fase 0
+## Qué incluye Fase 0
 
-- Base `erpgt`, 23 tablas: `esquema_version` · `configuracion`, `seguridad_version` · `empresa`, `sucursal` · 16 de seguridad (usuarios, roles, permisos, sesiones, módulos, menú) · `auditoria`, `auditoria_acceso`.
-- Sin vistas, procedimientos, funciones ni triggers en esta fase.
-- Seeds: política de contraseñas, empresa `EMP01` y sucursal `SUC01` genéricas, 18 módulos, 19 permisos, rol `ADMINISTRADOR` con todos, usuario `admin` (contraseña temporal `Cambiar.2026!`, cambio obligatorio en el primer ingreso), menú inicial de 8 elementos.
-- Revisión estática hecha: paréntesis y comillas balanceados, ninguna FK apunta a una tabla aún no creada, sin nombres de índice o restricción repetidos, toda FK tiene índice, archivo en UTF-8 sin BOM.
+- **Base de datos** `erpgt` (v0.1.0): 23 tablas y seeds indispensables. Plantilla del usuario MySQL de la aplicación en `database/usuarios-ejemplo.sql`.
+- **Backend** (.NET 10, capas Domain / Application / Infrastructure / Api):
+  - Autenticación: login, refresh rotativo con detección de reutilización, logout, bloqueo por intentos, cambio obligatorio de contraseña, recuperación por correo, cambio de empresa/sucursal.
+  - Autorización en servidor: contexto → módulo → permiso, con denegar > conceder > roles y caché invalidable.
+  - Administración: usuarios, roles, permisos directos, estado de módulos, menú dinámico, bitácora.
+  - Catálogo de referencia **Sucursales** (patrón CRUD para los demás): listado en servidor, concurrencia optimista, baja lógica, exportación CSV, auditoría en la misma transacción.
+  - Transversal: ProblemDetails, correlation id, Serilog, limitación de tasa, `/health`, `/health/version`, OpenAPI en desarrollo.
+- **Frontend** (Next.js 16): BFF con cookies httpOnly, `proxy.ts`, login, recuperación, cambio de contraseña, marco con menú dinámico y selector de sucursal, pantallas de usuarios, roles, módulos, sucursales y bitácora. Tema por tokens (`documentation/DISENO-UI.md`).
 
-### Cómo probarla
+## Verificación realizada (2026-10-10)
 
-Requiere que la base `erpgt` no exista. Desde la raíz del proyecto:
+| Comprobación | Resultado |
+|---|---|
+| `dotnet build ERP.sln` | Correcto, 0 advertencias (las advertencias son errores) |
+| `dotnet test` | 157 unitarias y de arquitectura + 34 de integración, todas pasan |
+| `corepack yarn typecheck` / `lint` / `test` / `build` | Correctos; 39 pruebas de frontend |
+| Flujo real por el BFF contra una base temporal | Redirección al login, CSRF, login, cambio obligatorio de contraseña, menú, CRUD de sucursales, 409 por duplicado y por versión vieja, exportación, bitácora, logout |
+| Recorrido de pantallas con navegador sin ventana | 14 pasos (login, sucursales, usuarios, roles, módulos, bitácora, menú de usuario) sin errores de consola ni de red |
 
-```
-PowerShell:  mysql -u root -p --default-character-set=utf8mb4 -e "source database/database.sql"
-cmd / bash:  mysql -u root -p --default-character-set=utf8mb4 < database/database.sql
-```
+Criterios de aceptación de `ESPECIFICACION.md §C1`:
 
-Comprobación rápida después de instalar:
-
-```sql
-USE erpgt;
-SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'erpgt';  -- 23
-SELECT (SELECT COUNT(*) FROM modulo) modulos, (SELECT COUNT(*) FROM permiso) permisos,
-       (SELECT COUNT(*) FROM rol_permiso) rol_permiso, (SELECT COUNT(*) FROM menu) menu;  -- 18, 19, 19, 8
-SELECT nombre FROM modulo WHERE codigo = 'ORGANIZACION';  -- 'Organización', con tilde
-```
+1. `database.sql` se instala en MySQL 8.4 vacío — **cumplido** (cada corrida de pruebas lo instala en 8.4.11).
+2. Compila, pasa pruebas, `yarn dev` y la API arrancan — **cumplido**. Abrir en Visual Studio y depurar desde VS Code (`.vscode/launch.json`) — **sin verificar**.
+3. Login, refresh, logout, bloqueo y cambio obligatorio de contraseña — **cumplido** (pruebas de integración).
+4. 401 sin token, 403 sin permiso, 403 con módulo no liberado y prueba "todo endpoint tiene permiso" — **cumplido**.
+5. El menú cambia según rol y estado del módulo; llamar a la API directamente no evita los controles — **cumplido**.
+6. Cada operación del catálogo de referencia deja auditoría — **cumplido**.
+7. La aplicación corre con un usuario MySQL sin DDL — **sin verificar**: se probó con `root`. La plantilla de otorgamientos existe pero no se ha ejecutado.
 
 ## Decisiones
 
-- **2026-10-09 — Diseño aprobado.** Preguntas P6–P17 de `DISENO.md` quedan con sus valores por defecto.
-- **2026-10-09 — MySQL 8.0 en lugar de 8.4** para desarrollo (ADR-021). El equipo tiene 8.0.46 en `localhost:3306`.
-- **2026-10-09 — Esquema de Fase 0** (ADR-022): base `erpgt`; solo el rol `ADMINISTRADOR`; `usuario_rol` admite empresa opcional; `creado_por`/`modificado_por` sin FK; `solicitud_idempotente` pasa a 1C.
-- **2026-10-09 — Formato del hash de contraseñas** fijado en ADR-015; el backend debe respetarlo.
-- **2026-10-09 — Cambios respecto al plan presentado:** no se sembró el permiso `AUDITORIA_BITACORA_EXPORTAR` (la exportación de auditoría es de 1G) ni permisos para administrar el menú (Fase 0 no tiene esa pantalla).
-- ADR-012, 016, 017, 018 y 020 siguen **propuestas**; se confirman con el plan de backend de Fase 0.
-- Decisiones anteriores de C0 (Cartera, `PROCESAR`, costeo en C#, orden de secciones, `proxy.ts`): ver `DECISIONES.md`.
+- **2026-10-10 — MySQL 8.4.11** instalado por el dueño; el 8.0 se retiró. ADR-021 queda sin efecto.
+- **2026-10-10 — Decisiones de implementación** en ADR-023: marca `[SoloAutenticado]`, rol de sistema no editable, módulos base siempre liberados, cambiar contraseña cierra todas las sesiones, cookies `SameSite=Strict` con verificación de origen, TanStack Table fijado en la versión 8.
+- **2026-10-10 — Único cambio a `database.sql`** en esta sesión: el comentario de cabecera con la versión del motor (anunciado en el plan).
+- **2026-10-10 — Fuera de Fase 0** (no estaban en `§C1`): pantalla para editar la política de contraseñas y los datos de la empresa (1A), listado y cierre de sesiones activas, idempotencia (`Idempotency-Key`, 1C).
+- Decisiones anteriores (diseño, esquema de Fase 0): ver `DECISIONES.md`.
 
 ## Pendientes y problemas conocidos
 
-1. **`database.sql` sin ejecutar.** Una prueba en una base temporal `erp_test_fase0` fue bloqueada por los permisos de la sesión; no se insistió. Lo prueba el dueño (o se habilita el permiso).
-2. **`CLAUDE.md §4`/`§15` y `ESPECIFICACION.md`** (D2, criterio 1 de C1) siguen diciendo MySQL 8.4; conviene que el dueño los ajuste a ADR-021.
-3. **Usuario MySQL de la aplicación** (solo DML, sin `UPDATE`/`DELETE` en auditoría): plantilla `database/usuarios-ejemplo.sql` pendiente para la sesión de backend. El desarrollo no debe usar `root`.
-4. **.NET SDK 10 sin instalar** (hay 9.0.312): hace falta antes del backend. Yarn sin activar (Corepack presente).
-5. `ESPECIFICACION.md §B2` conserva el orden antiguo de secciones; prevalece `CLAUDE.md §7`.
-6. `PROMPTS.md` y `DISENO-UI.md`, citados en la especificación, no existen (`DISENO-UI.md` se crea con el frontend).
-7. Los diagramas Mermaid de `DISENO.md` no se han comprobado en un visor.
+1. **Usuario MySQL de la aplicación.** La API de desarrollo usa `root` (User Secrets). Falta crear el usuario con `database/usuarios-ejemplo.sql` y comprobar que la aplicación funciona con él (criterio 7).
+2. **Certificado HTTPS de desarrollo.** Se lanzó `dotnet dev-certs https --trust`; Windows pide confirmación en una ventana. Si no se confirmó, el perfil `https` de la API mostrará advertencia del navegador. El desarrollo normal usa `http://localhost:5080` y no lo necesita.
+3. **`erpgt` conserva la contraseña inicial** del administrador: el flujo se probó en bases temporales para no alterarla.
+4. **Correo.** En desarrollo los mensajes se guardan en `backend/src/ERP.Api/correo-saliente/`. Para producción falta configurar SMTP (`Correo:Modo = Smtp`).
+5. **Seguridad pendiente para 1G:** cabecera `Content-Security-Policy` en el frontend; limpieza periódica de `refresh_token`, `intento_login` y `token_recuperacion`; límite de solicitudes general (hoy solo en autenticación).
+6. **Mensajes de validación del servidor** nombran el campo en formato técnico (por ejemplo `'Nombre Usuario' no debería estar vacío`). El formulario valida antes con mensajes propios; mejorar los del servidor queda pendiente.
+7. **Modo oscuro**: los tokens existen, no hay selector.
+8. `ESPECIFICACION.md §B2` conserva el orden antiguo de secciones del script; prevalece `CLAUDE.md §7`.
+9. `PROMPTS.md`, citado en la especificación, no existe en el proyecto.
+10. Los diagramas Mermaid de `DISENO.md` no se han comprobado en un visor.
 
 ## Comandos de verificación
 
-Aún no hay proyectos de backend ni frontend. Base de datos: ver "Cómo probarla".
+```
+backend/    dotnet build ERP.sln · dotnet test · dotnet run --project src/ERP.Api --launch-profile http
+frontend/   corepack yarn install · dev · build · lint · typecheck · test
+base        mysql -u root -p --default-character-set=utf8mb4 -e "source database/database.sql"   (la ejecuta el dueño)
+```
+
+Git no está en el `PATH` de las sesiones de Claude Code en este equipo; se invoca como `C:\Program Files\Git\cmd\git.exe`.

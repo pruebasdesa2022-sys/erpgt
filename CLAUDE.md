@@ -146,10 +146,15 @@ Antes de la Fase 0 debe haber: **.NET SDK 10**, **MySQL 8.4** (puede convivir co
 
 ## 16. Comandos de verificación
 
-*(Claude Code: completa y mantén esta sección cuando existan los proyectos.)*
+Todos funcionan desde la carpeta indicada (verificados el 2026-10-10).
 
 ```
-backend:   dotnet build ERP.sln · dotnet test · dotnet run --project src/ERP.Api
-frontend:  yarn install · yarn dev · yarn build · yarn lint · yarn test
-base:      (el usuario ejecuta database/database.sql en MySQL)
+backend/:   dotnet build ERP.sln · dotnet test · dotnet run --project src/ERP.Api --launch-profile http   (API en http://localhost:5080)
+frontend/:  corepack yarn install · corepack yarn dev · build · lint · typecheck · test                   (app en http://localhost:3000)
+base:       (el usuario ejecuta database/database.sql en MySQL)
 ```
+
+- Yarn se usa siempre como `corepack yarn …` (no hay `yarn` global).
+- `dotnet test` incluye las pruebas de integración: necesitan `ConnectionStrings:Pruebas` en User Secrets del proyecto `tests/ERP.IntegrationTests` y crean/eliminan una base `erp_test_*`.
+- Secretos de desarrollo de la API (`ConnectionStrings:Erp`, `Jwt:Clave`): User Secrets del proyecto `src/ERP.Api`.
+- En este equipo Git no está en el `PATH` de la sesión: `C:\Program Files\Git\cmd\git.exe`.

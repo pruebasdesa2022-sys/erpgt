@@ -20,7 +20,7 @@ Tomadas en la especificación (`ESPECIFICACION.md §A2`), estado **Aceptada**. N
 
 ## ADR-012 — Colaboración entre módulos
 
-**Estado:** Propuesta · 2026-10-09
+**Estado:** Aceptada con la implementación de Fase 0 (ADR-023) · 2026-10-10
 
 - **Contexto:** "un módulo no consulta ni escribe tablas de otro" choca con las FK y con listados que necesitan datos de varios módulos.
 - **Decisión:** (1) solo el módulo dueño escribe su tabla; (2) la colaboración es por interfaces en `Application/<Modulo>/Contratos`, en proceso y dentro de la transacción en curso; (3) la lectura cruzada usa el contrato de consulta del dueño; (4) FK entre módulos permitidas; (5) los documentos guardan *snapshot* de los datos que deben congelarse; (6) solo `REPORTES` lee vistas de solo lectura que cruzan módulos; (7) grafo de dependencias acíclico, verificado por prueba.
@@ -45,7 +45,7 @@ Tomadas en la especificación (`ESPECIFICACION.md §A2`), estado **Aceptada**. N
 
 ## ADR-015 — Hash de contraseñas con PBKDF2 del framework
 
-**Estado:** Propuesta · 2026-10-09
+**Estado:** Aceptada con la implementación de Fase 0 (ADR-023) · 2026-10-10
 
 - **Contexto:** `CLAUDE.md §8` admite Argon2id o PBKDF2. Argon2id requiere un paquete de terceros.
 - **Decisión:** `Rfc2898DeriveBytes.Pbkdf2` con HMAC-SHA512, sal aleatoria por contraseña y número de iteraciones configurable (valor inicial según la recomendación vigente de OWASP al implementar). Formato almacenado con prefijo de versión para poder migrar al iniciar sesión.
@@ -55,7 +55,7 @@ Tomadas en la especificación (`ESPECIFICACION.md §A2`), estado **Aceptada**. N
 
 ## ADR-016 — Contexto empresa/sucursal en el JWT, revalidado en servidor
 
-**Estado:** Propuesta · 2026-10-09
+**Estado:** Aceptada con la implementación de Fase 0 (ADR-023) · 2026-10-10
 
 - **Contexto:** el usuario trabaja sobre una empresa y sucursal activas; el backend no puede confiar en lo que diga el cliente.
 - **Decisión:** el token de acceso lleva los *claims* `emp` y `suc`. Cambiar de contexto es una llamada que emite un token nuevo. Un middleware revalida ambos contra `usuario_empresa`/`usuario_sucursal` en cada solicitud (con caché invalidable).
@@ -63,7 +63,7 @@ Tomadas en la especificación (`ESPECIFICACION.md §A2`), estado **Aceptada**. N
 
 ## ADR-017 — Unidad de trabajo, reintentos e idempotencia
 
-**Estado:** Propuesta · 2026-10-09
+**Estado:** Aceptada con la implementación de Fase 0 (ADR-023); la idempotencia se implementa en 1C · 2026-10-10
 
 - **Contexto:** un documento debe procesarse en una sola transacción que atraviesa varios módulos.
 - **Decisión:** `IUnitOfWork` por solicitud (una conexión, una transacción); reintento de la transacción completa hasta 3 veces ante errores 1213 y 1205; la fila de `solicitud_idempotente` se inserta dentro de esa misma transacción con índice único.
@@ -71,7 +71,7 @@ Tomadas en la especificación (`ESPECIFICACION.md §A2`), estado **Aceptada**. N
 
 ## ADR-018 — Otorgamientos de MySQL por tabla
 
-**Estado:** Propuesta · 2026-10-09
+**Estado:** Aceptada con la implementación de Fase 0 (ADR-023) · 2026-10-10
 
 - **Contexto:** la auditoría y los movimientos son inmutables y el usuario de la aplicación no debe poder alterarlos. MySQL no permite restar privilegios de una tabla a un otorgamiento hecho a nivel de base.
 - **Decisión:** el usuario de la aplicación recibe privilegios **tabla por tabla**: `SELECT, INSERT` en tablas inmutables; `SELECT, INSERT, UPDATE, DELETE` en el resto; `EXECUTE` en los SP. Plantilla en `database/usuarios-ejemplo.sql` (sin contraseñas); cada script de `updates/` incluye los otorgamientos de sus tablas nuevas.
@@ -87,7 +87,7 @@ Tomadas en la especificación (`ESPECIFICACION.md §A2`), estado **Aceptada**. N
 
 ## ADR-020 — Dependencias previstas
 
-**Estado:** Propuesta · 2026-10-09
+**Estado:** Reemplazada por la tabla de dependencias instaladas de ADR-023 · 2026-10-10
 
 - **Contexto:** `CLAUDE.md §4` exige pocas dependencias y revisar licencias.
 - **Decisión:** lista prevista para Fase 0. **La versión exacta y la licencia de cada paquete se verifican y se registran en esta entrada en el momento de agregarlo**; nada se da por instalado todavía.
@@ -119,7 +119,7 @@ Descartados o condicionados:
 
 ## ADR-021 — Desarrollo sobre MySQL 8.0 (cambio al stack fijado)
 
-**Estado:** Aceptada (decidida por el dueño) · 2026-10-09 — modifica D2
+**Estado:** Sin efecto desde 2026-10-10 — el dueño instaló MySQL 8.4.11 y retiró el 8.0, así que vuelve a regir D2 (MySQL 8.4 LTS). Se conserva como historial.
 
 - **Contexto:** el stack fija MySQL 8.4 LTS (D2), pero el equipo de desarrollo ya tiene MySQL 8.0.46 en `localhost:3306` y el dueño prefiere usarlo en lugar de instalar una segunda instancia.
 - **Decisión:** se desarrolla y se prueba contra MySQL 8.0 (mínimo 8.0.16, por los `CHECK`). `database.sql` y los scripts de `updates/` usan solo funciones presentes tanto en 8.0 como en 8.4, para que la base pueda instalarse en 8.4 sin cambios.
@@ -140,3 +140,59 @@ Descartados o condicionados:
   - `solicitud_idempotente` no entra en Fase 0; se crea con la primera operación crítica (1C).
   - Sin vistas, procedimientos, funciones ni triggers en Fase 0.
 - **Consecuencias:** cada script de `updates/` que agregue permisos debe concederlos también al rol `ADMINISTRADOR`, porque no hay atajo de superadministrador en el código.
+
+## ADR-023 — Decisiones de implementación de Fase 0 (backend y frontend)
+
+**Estado:** Aceptada (plan aprobado por el dueño) · 2026-10-10
+
+Con la implementación quedan **aceptadas** ADR-012 (colaboración entre módulos), ADR-015 (PBKDF2), ADR-016 (contexto en el JWT), ADR-017 (unidad de trabajo y reintentos; la idempotencia llega en 1C) y ADR-018 (otorgamientos por tabla, plantilla en `database/usuarios-ejemplo.sql`).
+
+- **Tercera marca de protección de endpoints, `[SoloAutenticado]`.** `CLAUDE.md §8` pide `[RequierePermiso]` en todo endpoint salvo los anónimos, pero la sesión propia, el menú, "mis permisos" y cambiar la contraseña propia no corresponden a ningún permiso. Esos endpoints llevan `[SoloAutenticado]`, que sigue validando usuario activo y contexto empresa/sucursal. La prueba automática exige exactamente una de las tres marcas por endpoint y mantiene una lista cerrada de los anónimos.
+- **Refresh, cambio de contexto y logout son anónimos a nivel HTTP**: su credencial es el propio refresh token.
+- **Una cuenta bloqueada responde `CUENTA_BLOQUEADA`** en lugar del mensaje genérico. Revela que la cuenta existe, a cambio de que el usuario legítimo sepa por qué no puede entrar.
+- **El rol de sistema (`ADMINISTRADOR`) no se edita ni se desactiva** desde la aplicación, y ninguna operación puede dejar el sistema sin un administrador activo.
+- **Los módulos base** (Seguridad, Organización, Auditoría) no pueden dejar de estar liberados.
+- **Cambiar la contraseña cierra todas las sesiones del usuario**, incluida la actual.
+- **DTO leídos por Dapper con propiedades, no constructor posicional**: así convierte `BIGINT UNSIGNED` a `long`. La conexión usa `GuidFormat=None` (las columnas `CHAR(36)` son texto) y `DateTimeKind=Utc`.
+- **Cookies de sesión `SameSite=Strict`** y verificación de `Origin` en el BFF para toda solicitud que modifica. Renovación de sesión con un solo vuelo y 15 segundos de gracia, para que solicitudes simultáneas no presenten dos veces el mismo refresh token.
+- **En desarrollo el BFF llama a la API por HTTP en `localhost:5080`**; fuera de desarrollo la API redirige a HTTPS y envía HSTS.
+- **`cacheComponents` y `output: 'standalone'`**: se conserva la configuración que genera Next.js 16; `standalone` se decide con el despliegue (1G).
+
+### Dependencias agregadas (versión instalada y licencia)
+
+Backend (`backend/Directory.Packages.props`):
+
+| Paquete | Versión | Licencia | Para qué |
+|---|---|---|---|
+| Dapper | 2.1.89 | Apache-2.0 | Mapeo de consultas |
+| MySqlConnector | 2.6.2 | MIT | Controlador MySQL |
+| FluentValidation (+ DependencyInjectionExtensions) | 12.1.1 | Apache-2.0 | Validación de DTO |
+| Serilog.AspNetCore | 10.0.0 | Apache-2.0 | Registro en consola y archivo rotativo |
+| Microsoft.AspNetCore.Authentication.JwtBearer | 10.0.12 | MIT | Validación del JWT |
+| Microsoft.IdentityModel.JsonWebTokens | 8.23.0 | MIT | Emisión del JWT |
+| Microsoft.AspNetCore.OpenApi | 10.0.12 | MIT | Documento OpenAPI |
+| Scalar.AspNetCore | 2.17.14 | MIT | Página de documentación de la API (solo Desarrollo/QA) |
+| MailKit | 4.18.1 | MIT | Envío de correo por SMTP |
+| Microsoft.Extensions.* (Caching.Memory, Options, Logging, DI) | 10.0.12 | MIT | Caché de autorización y configuración |
+| xunit / xunit.runner.visualstudio / Microsoft.NET.Test.Sdk | 2.9.3 / 4.0.1 / 18.10.1 | Apache-2.0 / Apache-2.0 / MIT | Pruebas (aserciones propias de xUnit) |
+| NetArchTest.Rules | 1.3.2 | MIT | Pruebas de arquitectura |
+| Microsoft.AspNetCore.Mvc.Testing | 10.0.12 | MIT | Pruebas de integración de la API |
+
+Frontend (`frontend/package.json`; licencia leída del `package.json` de cada paquete instalado):
+
+| Paquete | Versión | Licencia | Para qué |
+|---|---|---|---|
+| next / react / react-dom | 16.4.0 / 19.3.0 | MIT | Aplicación y BFF |
+| tailwindcss, tw-animate-css | 4.x / 1.4 | MIT | Estilos por tokens |
+| shadcn, @base-ui/react, class-variance-authority, cn | 4.21 / 1.8 / 0.7 / 0.4 | MIT (cva: Apache-2.0) | Componentes base (estilo `base-nova`) |
+| lucide-react | 1.53 | ISC | Iconos |
+| sonner, next-themes | 2.0 / 0.4 | MIT | Notificaciones |
+| @tanstack/react-query | 5.104 | MIT | Estado de servidor |
+| @tanstack/react-table | **8.21.3** | MIT | Tablas |
+| react-hook-form, @hookform/resolvers, zod | 7.89 / 5.9 / 4.6 | MIT | Formularios y validación |
+| server-only | — | MIT | Impide importar el código del BFF desde el navegador |
+| vitest, vite, jsdom, @testing-library/* | 5.0 / — | MIT | Pruebas |
+
+- **TanStack Table queda en la versión 8** a propósito: la 9 (la que instala Yarn por defecto) cambió su API. Subir de versión es una tarea aparte.
+- **xUnit 2** (no 3): es la plantilla disponible en el SDK instalado.
+- No se agregó ninguna librería con licencia comercial.
