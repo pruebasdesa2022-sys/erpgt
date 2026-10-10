@@ -63,7 +63,7 @@ Criterios de aceptación de `ESPECIFICACION.md §C1`:
 ## Pendientes y problemas conocidos
 
 1. **Usuario MySQL de la aplicación.** La API de desarrollo usa `root` (User Secrets). Falta crear el usuario con `database/usuarios-ejemplo.sql` y comprobar que la aplicación funciona con él (criterio 7).
-2. **Certificado HTTPS de desarrollo.** Se lanzó `dotnet dev-certs https --trust`; Windows pide confirmación en una ventana. Si no se confirmó, el perfil `https` de la API mostrará advertencia del navegador. El desarrollo normal usa `http://localhost:5080` y no lo necesita.
+2. **Certificado HTTPS de desarrollo.** Instalado y confiable en este equipo (`dotnet dev-certs https --trust`, vence el 2027-10-09). El perfil `https` de la API (`https://localhost:7080`) no se ha probado; el desarrollo normal usa `http://localhost:5080`.
 3. **`erpgt` conserva la contraseña inicial** del administrador: el flujo se probó en bases temporales para no alterarla.
 4. **Correo.** En desarrollo los mensajes se guardan en `backend/src/ERP.Api/correo-saliente/`. Para producción falta configurar SMTP (`Correo:Modo = Smtp`).
 5. **Seguridad pendiente para 1G:** cabecera `Content-Security-Policy` en el frontend; limpieza periódica de `refresh_token`, `intento_login` y `token_recuperacion`; límite de solicitudes general (hoy solo en autenticación).
