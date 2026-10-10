@@ -53,5 +53,31 @@ GRANT SELECT, INSERT ON erpgt.auditoria_acceso   TO 'erpgt_app'@'localhost';
 GRANT SELECT, INSERT ON erpgt.intento_login      TO 'erpgt_app'@'localhost';
 GRANT SELECT, INSERT ON erpgt.password_historial TO 'erpgt_app'@'localhost';
 
--- Fase 0 no tiene procedimientos almacenados. Cuando existan (etapa 1A):
---   GRANT EXECUTE ON PROCEDURE erpgt.sp_siguiente_correlativo TO 'erpgt_app'@'localhost';
+-- ----- Etapa 1A: catalogos y organizacion (se desactivan, no se borran) -----
+GRANT SELECT, INSERT, UPDATE ON erpgt.bodega             TO 'erpgt_app'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON erpgt.caja               TO 'erpgt_app'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON erpgt.departamento       TO 'erpgt_app'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON erpgt.centro_costo       TO 'erpgt_app'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON erpgt.moneda             TO 'erpgt_app'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON erpgt.tipo_cambio        TO 'erpgt_app'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON erpgt.impuesto           TO 'erpgt_app'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON erpgt.unidad_medida      TO 'erpgt_app'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON erpgt.unidad_conversion  TO 'erpgt_app'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON erpgt.tipo_producto      TO 'erpgt_app'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON erpgt.categoria          TO 'erpgt_app'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON erpgt.marca              TO 'erpgt_app'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON erpgt.tipo_proveedor     TO 'erpgt_app'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON erpgt.motivo_anulacion   TO 'erpgt_app'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON erpgt.banco              TO 'erpgt_app'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON erpgt.forma_pago         TO 'erpgt_app'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON erpgt.condicion_pago     TO 'erpgt_app'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON erpgt.cuenta_bancaria    TO 'erpgt_app'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON erpgt.tipo_documento     TO 'erpgt_app'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON erpgt.serie_documento    TO 'erpgt_app'@'localhost';
+
+-- Asignaciones de acceso: la aplicacion las reemplaza al guardar.
+GRANT SELECT, INSERT, DELETE ON erpgt.usuario_bodega TO 'erpgt_app'@'localhost';
+GRANT SELECT, INSERT, DELETE ON erpgt.usuario_caja   TO 'erpgt_app'@'localhost';
+
+-- Numeracion de documentos (etapa 1A).
+GRANT EXECUTE ON PROCEDURE erpgt.sp_siguiente_correlativo TO 'erpgt_app'@'localhost';
