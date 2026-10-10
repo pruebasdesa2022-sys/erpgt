@@ -5,7 +5,7 @@
 -- donde la base `erpgt` no existe. Nunca se re-ejecuta sobre una base
 -- con datos: los cambios posteriores van en database/updates/.
 --
--- Version del esquema : 0.2.0 (Fase 1A - Maestros y organizacion)
+-- Version del esquema : 0.2.1 (Fase 1A - Maestros y organizacion; permiso de catalogos globales)
 -- Motor               : MySQL 8.4 LTS (verificado en 8.4.11)
 -- Ejecutar con        : un usuario con privilegios de DDL (no el de la app)
 --   PowerShell : mysql -u <usuario> -p --default-character-set=utf8mb4 -e "source database/database.sql"
@@ -1352,7 +1352,6 @@ FROM (
   UNION ALL SELECT 'CATALOGOS',    'MOTIVOSANULACION', 'motivos de anulación'
   UNION ALL SELECT 'CATALOGOS',    'BANCOS',           'bancos'
   UNION ALL SELECT 'CATALOGOS',    'CUENTASBANCARIAS', 'cuentas bancarias'
-  UNION ALL SELECT 'CATALOGOS',    'MONEDAS',          'monedas'
   UNION ALL SELECT 'CATALOGOS',    'IMPUESTOS',        'impuestos'
   UNION ALL SELECT 'CATALOGOS',    'UNIDADES',         'unidades de medida'
 ) r
@@ -1379,7 +1378,9 @@ FROM (
   UNION ALL SELECT 'CATALOGOS', 'CATALOGOS_TIPOSCAMBIO_EDITAR',    'TIPOSCAMBIO',   'EDITAR',   'Corregir tipos de cambio'
   UNION ALL SELECT 'CATALOGOS', 'CATALOGOS_TIPOSCAMBIO_EXPORTAR',  'TIPOSCAMBIO',   'EXPORTAR', 'Exportar tipos de cambio'
   UNION ALL SELECT 'CATALOGOS', 'CATALOGOS_TIPOSDOCUMENTO_VER',    'TIPOSDOCUMENTO','VER',      'Ver tipos de documento'
-  UNION ALL SELECT 'CATALOGOS', 'CATALOGOS_TIPOSDOCUMENTO_EDITAR', 'TIPOSDOCUMENTO','EDITAR',   'Editar tipos de documento'
+  UNION ALL SELECT 'CATALOGOS', 'CATALOGOS_MONEDAS_VER',          'MONEDAS',       'VER',      'Ver monedas'
+  UNION ALL SELECT 'CATALOGOS', 'CATALOGOS_MONEDAS_EXPORTAR',     'MONEDAS',       'EXPORTAR', 'Exportar monedas'
+  UNION ALL SELECT 'CATALOGOS', 'CATALOGOS_GLOBALES_EDITAR',      'GLOBALES',      'EDITAR',   'Administrar los catálogos globales (monedas y tipos de documento)'
   UNION ALL SELECT 'CATALOGOS', 'CATALOGOS_SERIES_VER',            'SERIES',        'VER',      'Ver series y correlativos'
   UNION ALL SELECT 'CATALOGOS', 'CATALOGOS_SERIES_CREAR',          'SERIES',        'CREAR',    'Crear series y correlativos'
   UNION ALL SELECT 'CATALOGOS', 'CATALOGOS_SERIES_EDITAR',         'SERIES',        'EDITAR',   'Editar series (no el correlativo en curso)'
@@ -1447,7 +1448,7 @@ WHERE r.codigo = 'ADMINISTRADOR'
 UPDATE seguridad_version SET version = version + 1, modificado_en = UTC_TIMESTAMP(6) WHERE id = 1;
 
 INSERT INTO esquema_version (version, script, aplicado_por)
-VALUES ('0.2.0', 'database.sql', CURRENT_USER());
+VALUES ('0.2.1', 'database.sql', CURRENT_USER());
 
 COMMIT;
 
@@ -1464,5 +1465,5 @@ ALTER TABLE empresa
   ADD CONSTRAINT fk_empresa_moneda_local FOREIGN KEY (moneda_local_id) REFERENCES moneda (id);
 
 -- =====================================================================
--- Fin de database.sql (version 0.2.0)
+-- Fin de database.sql (version 0.2.1)
 -- =====================================================================
